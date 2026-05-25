@@ -84,11 +84,6 @@ with (main_canvas)
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
-
----
 
 ## 📄 License
 
@@ -99,5 +94,19 @@ Distributed under the **MIT License**.
 ## 👤 Author
 
 **M. Neto** - GitHub: [@mneet](https://github.com/mneet/)
+
+Nota do Autor:
+
+Venho utilizando algumas dessas ferramentas nos meus projetos há alguns anos. Resolvi dar uma polida no código e disponibilizá-los publicamente para a comunidade, mas peço que leiam os avisos abaixo antes de utilizá-los:
+
+- Mudança de Foco: O GameMaker não é mais a minha engine principal de desenvolvimento. Por conta disso, este repositório não receberá atualizações frequentes.
+
+- Suporte e Responsabilidade: O uso destes sistemas é fornecido "como está" (as is). Não tenho como prestar suporte ativo, e a integração no seu projeto é de sua inteira responsabilidade. Ficarei feliz em receber relatos de bugs nas Issues, mas as correções serão feitas no meu próprio tempo e disponibilidade.
+
+- Praticidade > Performance: O objetivo principal desses sistemas sempre foi facilitar e agilizar o desenvolvimento para as minhas próprias necessidades, e não necessariamente aplicar as práticas mais avançadas e performáticas do GM. Se o seu projeto exige otimização extrema, recomendo explorar outras alternativas na comunidade.
+
+- Uso de IA: Para viabilizar este lançamento público, utilizei modelos de Inteligência Artificial como auxiliares para redigir parte da documentação, formatar comentários e realizar pequenas refatorações de código.
+
+- Contribuições: São extremamente bem-vindas! Se você tem interesse em melhorar o código, criar forks ou trocar uma ideia para construir novas versões baseadas nestes sistemas, a porta está aberta. Fique à vontade para abrir um Pull Request ou entrar em contato.
 
 ---
