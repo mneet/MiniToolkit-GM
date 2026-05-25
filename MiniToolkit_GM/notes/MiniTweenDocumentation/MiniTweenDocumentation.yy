@@ -1,0 +1,11 @@
+{
+  "$GMNotes":"v1",
+  "%Name":"MiniTweenDocumentation",
+  "name":"MiniTweenDocumentation",
+  "parent":{
+    "name":"MiniTween",
+    "path":"folders/MiniTween.yy",
+  },
+  "resourceType":"GMNotes",
+  "resourceVersion":"2.0",
+}

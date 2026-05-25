@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"NodeButton",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"NodeButton",
+  "parent":{
+    "name":"Prefabs",
+    "path":"folders/MiniNode/Utility/Prefabs.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

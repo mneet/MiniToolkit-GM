@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"MiniEvent",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"MiniEvent",
+  "parent":{
+    "name":"MiniEvent",
+    "path":"folders/MiniEvent.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

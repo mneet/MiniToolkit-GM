@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"NodeSettings",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"NodeSettings",
+  "parent":{
+    "name":"MiniNode",
+    "path":"folders/MiniNode.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

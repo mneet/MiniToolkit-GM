@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"MiniNodeProcessor",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"MiniNodeProcessor",
+  "parent":{
+    "name":"Components",
+    "path":"folders/MiniNode/NodeStructs/Components.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

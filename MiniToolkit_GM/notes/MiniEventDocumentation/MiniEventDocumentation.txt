@@ -1,0 +1,182 @@
+# MiniEvent - Function Documentation
+
+## Overview
+
+THIS DOCUMENTATION WAS WRITTEN BY AI, IT MAY CONTAIN ERRORS
+
+**MiniEvent** is a event dispatcher inspired by the Observer pattern. It allows instances or structs to `connect` callbacks to an event, `invoke` them with arguments, and safely clean up connections when targets are destroyed.
+
+**Author:** M. Neet - https://github.com/mneet/MiniToolkit-GM
+
+**Version:** 1.0.0
+
+---
+
+## Constructor
+
+### MiniEvent()
+Creates a new event dispatcher.
+
+**Parameters:** None
+
+**Returns:** Struct (MiniEvent instance)
+
+**Example:**
+```gml
+var events = new MiniEvent();
+```
+
+---
+
+## Public Methods
+
+### connect(_connection, _callback, _once = false, _priority = 0)
+Register a callback on this event.
+
+**Parameters:**
+- _connection — Object instance id or struct that "owns" the connection
+- _callback — Function or method to call when the event is invoked
+- _once (optional, default false) — If true, the callback will be removed after the first invocation
+- _priority (optional, default 0) — Numeric priority. Higher values run earlier
+
+**Returns:** Self (for chaining)
+
+**Notes:**
+- When connecting a struct, a weak reference is kept so the event does not prevent garbage collection.
+- Multiple registrations of the same connection+callback are allowed by default (take care to avoid duplicate connects if undesired).
+
+**Example:**
+```gml
+// Connect a regular instance method
+events.connect(obj_player, function(data) { show_message("Player event: " + string(data)); }, false, 10);
+
+// Connect a struct as owner
+var owner = { id: 1 };
+events.connect(owner, function(msg) { show_message(msg); });
+
+// Connect once
+events.connect(obj_player, some_callback, true);
+```
+
+---
+
+### disconnect(_connection, _callback = undefined)
+Disconnect callbacks associated with a connection. If `_callback` is omitted, all callbacks for the connection are removed.
+
+**Parameters:**
+- _connection — The connection owner (instance id or struct used when connecting)
+- _callback (optional) — Specific callback to remove. If omitted, all callbacks for `_connection` are removed.
+
+**Returns:** Self
+
+**Example:**
+```gml
+// Remove a specific callback
+events.disconnect(obj_player, some_callback);
+
+// Remove all callbacks for the connection
+events.disconnect(owner);
+```
+
+---
+
+### invoke(...args)
+Invoke all registered callbacks in priority order, forwarding any arguments provided.
+
+**Parameters:**
+- ...args — Any values to forward to the callbacks
+
+**Returns:** Self
+
+**Notes:**
+- Callbacks with higher `priority` run before lower priority.
+- Callbacks registered with `_once = true` are automatically removed after execution.
+
+**Example:**
+```gml
+// Dispatch without args
+events.invoke();
+
+// Dispatch with args
+events.invoke({ score: 100, player: obj_player });
+```
+
+---
+
+## Broadcast helpers
+
+MiniEvent includes a simple global broadcast mechanism for named topics.
+
+### mini_event_listen(_broadcast, _id, _callback, _once = false, _priority = 0)
+Register a listener for a named broadcast.
+
+**Parameters:**
+- _broadcast — String name of broadcast
+- _id — Connection owner (instance id or struct)
+- _callback — Function to call when broadcast emitted
+- _once — Optional boolean, remove after first call
+- _priority — Optional priority number (higher = executed earlier)
+
+**Example:**
+```gml
+mini_event_listen("player_died", obj_manager, function(data) { show_message("Player died: " + string(data.score)); });
+```
+
+### mini_event_broadcast(_broadcast, ...args)
+Emit a named broadcast, forwarding arguments to listeners.
+
+**Parameters:**
+- _broadcast — String name of broadcast
+- ...args — Optional arguments forwarded to listeners
+
+**Example:**
+```gml
+mini_event_broadcast("player_died", { score: 123 });
+```
+
+### mini_event_clear_broadcast(_broadcast = undefined)
+Clear a named broadcast's listener list, or clear all broadcasts when omitted.
+
+**Parameters:**
+- _broadcast (optional) — If omitted, all broadcasts are cleared
+
+**Example:**
+```gml
+mini_event_clear_broadcast("player_died");
+mini_event_clear_broadcast(); // clear all
+```
+
+---
+
+## Examples
+
+Full example showing lifecycle:
+
+```gml
+// Create event
+var events = new MiniEvent();
+
+// Listen from an instance
+events.connect(obj_ui_manager, function(msg) { show_message(msg); });
+
+// Listen from a struct and run once
+var owner = { name: "temp" };
+events.connect(owner, function() { show_message("One-time"); }, true);
+
+// Dispatch
+events.invoke("Hello world");
+
+// Remove all for owner
+events.disconnect(owner);
+
+// Cleanup before discarding
+events.cleanup();
+```
+
+---
+
+## Changelog
+
+- 1.0.0 — Initial system
+
+---

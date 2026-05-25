@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"MiniNodeNavCenter",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"MiniNodeNavCenter",
+  "parent":{
+    "name":"Components",
+    "path":"folders/MiniNode/NodeStructs/Components.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

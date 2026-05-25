@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"MiniTweenSettings",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"MiniTweenSettings",
+  "parent":{
+    "name":"MiniTween",
+    "path":"folders/MiniTween.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

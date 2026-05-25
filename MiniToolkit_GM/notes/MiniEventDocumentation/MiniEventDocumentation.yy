@@ -1,0 +1,11 @@
+{
+  "$GMNotes":"v1",
+  "%Name":"MiniEventDocumentation",
+  "name":"MiniEventDocumentation",
+  "parent":{
+    "name":"MiniEvent",
+    "path":"folders/MiniEvent.yy",
+  },
+  "resourceType":"GMNotes",
+  "resourceVersion":"2.0",
+}

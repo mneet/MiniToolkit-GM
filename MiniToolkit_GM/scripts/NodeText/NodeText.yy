@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"NodeText",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"NodeText",
+  "parent":{
+    "name":"Prefabs",
+    "path":"folders/MiniNode/Utility/Prefabs.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

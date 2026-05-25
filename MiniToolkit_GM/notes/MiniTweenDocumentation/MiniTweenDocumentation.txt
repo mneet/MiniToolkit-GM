@@ -1,0 +1,217 @@
+# MiniTween - Function Documentation
+
+## Overview
+
+THIS DOCUMENTATION WAS WRITTEN BY AI, IT MAY CONTAIN ERRORS
+
+**MiniTween** is a tweening (animation) system for GameMaker that allows animating numeric properties of objects and structs in a simple and smooth way.
+
+**Author:** M. Neet - https://github.com/mneet/MiniToolkit-GM
+
+**Version:** 2.0.0
+
+---
+
+## Constructors
+
+### MiniTween(target, duration)
+Creates a new tween to animate properties of an object or struct.
+
+**Parameters:**
+- target - Object (instance) or struct to animate
+- duration - Animation duration in seconds
+
+**Returns:** Tween instance (allows method chaining)
+
+---
+
+### mini_tween(target, duration)
+Shorthand to create a new tween.
+
+**Parameters:**
+- target - Object (instance) or struct to animate
+- duration - Animation duration in seconds
+
+**Returns:** Tween instance
+
+---
+
+## Configuration Methods
+
+### .tween(property, to, [easing])
+Adds a property to animate.
+
+**Parameters:**
+- property - Property name (string)
+- to - Desired final value
+- easing (optional) - Easing curve (default: EaseInOutSine)
+
+**Returns:** self
+
+---
+
+### .delay(seconds)
+Sets a delay before the tween starts.
+
+**Parameters:**
+- seconds - Delay time in seconds
+
+**Returns:** self
+
+---
+
+### .loop(count, [yoyo])
+Sets how many times the tween should repeat.
+
+**Parameters:**
+- count - Number of repetitions (0 = does not repeat, -1 = infinite)
+- yoyo (optional) - If true, reverses direction each repetition
+
+**Returns:** self
+
+---
+
+## Control Methods
+
+### .pause()
+Pauses the tween execution.
+
+**Returns:** self
+
+---
+
+### .resume()
+Resumes a paused tween.
+
+**Returns:** self
+
+---
+
+### .cancel()
+Cancels the tween and executes the on_cancel callback if defined.
+
+**Returns:** Nothing
+
+---
+
+### .complete()
+Immediately completes the tween (jumps to final values).
+
+**Returns:** Nothing
+
+---
+
+## Callbacks
+
+### .on_start(callback)
+Sets a function to be called when the tween starts (after delay).
+
+**Parameters:**
+- callback - Callback function
+
+**Returns:** self
+
+---
+
+### .on_update(callback)
+Sets a function to be called each frame the tween updates values. Useful for integration with other systems (e.g., mark MiniNode transform as dirty).
+
+**Parameters:**
+- callback - Callback function that receives (target, progress)
+
+**Returns:** self
+
+---
+
+### .on_complete(callback)
+Sets a function to be called when the tween completes (all loops done).
+
+**Parameters:**
+- callback - Callback function
+
+**Returns:** self
+
+---
+
+### .on_loop(callback)
+Sets a function to be called each loop cycle.
+
+**Parameters:**
+- callback - Callback function
+
+**Returns:** self
+
+---
+
+### .on_cancel(callback)
+Sets a function to be called when the tween is cancelled.
+
+**Parameters:**
+- callback - Callback function
+
+**Returns:** self
+
+---
+
+## Global Control Functions
+
+### mini_tween_cancel_all()
+Cancels all active tweens.
+
+**Returns:** Nothing
+
+---
+
+### mini_tween_cancel_target(target)
+Cancels all tweens on a specific target.
+
+**Parameters:**
+- target - Object or struct
+
+**Returns:** Nothing
+
+---
+
+### mini_tween_pause_all()
+Pauses all active tweens.
+
+**Returns:** Nothing
+
+---
+
+### mini_tween_resume_all()
+Resumes all paused tweens.
+
+**Returns:** Nothing
+
+---
+
+### mini_tween_count()
+Gets the number of active tweens.
+
+**Returns:** Real number
+
+---
+
+
+## Available Easing Curves
+
+- EaseLinear
+- EaseInSine, EaseOutSine, EaseInOutSine
+- EaseInQuad, EaseOutQuad, EaseInOutQuad
+- EaseInCubic, EaseOutCubic, EaseInOutCubic
+- EaseInQuart, EaseOutQuart, EaseInOutQuart
+- EaseInQuint, EaseOutQuint, EaseInOutQuint
+- EaseInExpo, EaseOutExpo, EaseInOutExpo
+- EaseInCirc, EaseOutCirc, EaseInOutCirc
+- EaseInBack, EaseOutBack, EaseInOutBack
+- EaseInElastic, EaseOutElastic, EaseInOutElastic
+- EaseInBounce, EaseOutBounce, EaseInOutBounce
+
+---
+
+## Changelog
+
+- 1.0.0 — Initial system
+
+---

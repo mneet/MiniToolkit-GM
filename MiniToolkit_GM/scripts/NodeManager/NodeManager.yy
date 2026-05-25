@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"NodeManager",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"NodeManager",
+  "parent":{
+    "name":"InternalSystems",
+    "path":"folders/MiniNode/InternalSystems.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

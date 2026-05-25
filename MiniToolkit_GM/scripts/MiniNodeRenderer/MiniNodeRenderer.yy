@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"MiniNodeRenderer",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"MiniNodeRenderer",
+  "parent":{
+    "name":"Components",
+    "path":"folders/MiniNode/NodeStructs/Components.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

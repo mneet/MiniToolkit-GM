@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"PennersEasingAlgorithms",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"PennersEasingAlgorithms",
+  "parent":{
+    "name":"System",
+    "path":"folders/MiniTween/System.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

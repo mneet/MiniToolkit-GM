@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"NodeAnimator_OBSOLETE",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"NodeAnimator_OBSOLETE",
+  "parent":{
+    "name":"Utility",
+    "path":"folders/MiniNode/Utility.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

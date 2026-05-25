@@ -1,0 +1,370 @@
+# MiniNode - Function Documentation
+
+## Overview
+
+THIS DOCUMENTATION WAS WRITTEN BY AI, IT MAY CONTAIN ERRORS
+
+**MiniNode** is a modular, component-based user interface (UI) system for GameMaker. It facilitates UI hierarchy creation, transform inheritance (position, scale, rotation, alpha), deferred drawing, event-driven architecture, and automatic keyboard/gamepad/mouse directional navigation.
+
+**Author:** M. Neet - https://github.com/mneet/MiniToolkit-GM
+**Version:** 1.0.0
+
+---
+
+## Enums
+
+### NODE_ORIGIN
+Defines the anchor point of a node for positioning, scaling, and rotation.
+- `NODE_ORIGIN.TOP_LEFT`
+- `NODE_ORIGIN.TOP_CENTER`
+- `NODE_ORIGIN.TOP_RIGHT`
+- `NODE_ORIGIN.MIDDLE_LEFT`
+- `NODE_ORIGIN.MIDDLE_CENTER`
+- `NODE_ORIGIN.MIDDLE_RIGHT`
+- `NODE_ORIGIN.BOTTOM_LEFT`
+- `NODE_ORIGIN.BOTTOM_CENTER`
+- `NODE_ORIGIN.BOTTOM_RIGHT`
+
+### NODE_HFLOW
+Horizontal flow direction for `MiniNodeContainer` auto-layout.
+- `NODE_HFLOW.LEFT` (Right to Left)
+- `NODE_HFLOW.RIGHT` (Left to Right)
+
+### NODE_VFLOW
+Vertical flow direction for `MiniNodeContainer` auto-layout.
+- `NODE_VFLOW.UP` (Bottom to Top)
+- `NODE_VFLOW.DOWN` (Top to Bottom)
+
+### NODE_AXIS
+Primary fill direction for `MiniNodeContainer` auto-layout.
+- `NODE_AXIS.HORIZONTAL` (Fills row first, then adds columns/rows)
+- `NODE_AXIS.VERTICAL` (Fills column first, then adds columns/rows)
+
+### MND_NAV_INPUT
+Global navigation mode.
+- `MND_NAV_INPUT.BUTTON` (Keyboard/Gamepad input)
+- `MND_NAV_INPUT.CURSOR` (Mouse/Touch hover input)
+
+---
+
+## Constructors
+
+### MiniNode(_id, _origin)
+Creates the base element with transform, rendering, and processing components.
+- `_id` — Unique string identifier
+- `_origin` — Optional `NODE_ORIGIN` (default: `MIDDLE_CENTER`)
+- **Returns:** Struct (MiniNode instance)
+
+### MiniNodeCanvas(_name, _origin)
+Organizational root node that can be registered in the NodeManager.
+- `_name` — Unique string identifier
+- `_origin` — Optional `NODE_ORIGIN` (default: `TOP_LEFT`)
+- **Returns:** Struct (MiniNodeCanvas instance)
+
+### MiniNodeContainer(_name, _columns, _origin)
+A layout node that automatically arranges children in a list or grid.
+- `_name` — Unique string identifier
+- `_columns` — Optional columns number (default: `0` / unlimited)
+- `_origin` — Optional `NODE_ORIGIN` (default: `MIDDLE_CENTER`)
+- **Returns:** Struct (MiniNodeContainer instance)
+
+### MiniNodeSprite(_name, _sprite, _color, _animate, _origin)
+A node that renders a sprite with optional frame animation.
+- `_name` — Unique string identifier
+- `_sprite` — Sprite asset index
+- `_color` — Optional blend color (default: `c_white`)
+- `_animate` — Optional boolean to auto-animate subimages (default: `false`)
+- `_origin` — Optional `NODE_ORIGIN` (default: `MIDDLE_CENTER`)
+- **Returns:** Struct (MiniNodeSprite instance)
+
+### MiniNodeText(_name, _text, _font, _color, _origin)
+A node that renders text with custom alignment and optional wrapping.
+- `_name` — Unique string identifier
+- `_text` — String text content
+- `_font` — Font asset index
+- `_color` — Color constant
+- `_origin` — Optional `NODE_ORIGIN` (default: `MIDDLE_CENTER`)
+- **Returns:** Struct (MiniNodeText instance)
+
+### MiniNodeButton(_name, _origin)
+Interactive button node that handles selection, triggers action events, and automatically binds a navigator component.
+- `_name` — Unique string identifier
+- `_origin` — Optional `NODE_ORIGIN` (default: `MIDDLE_CENTER`)
+- **Returns:** Struct (MiniNodeButton instance)
+
+---
+
+## Core Components
+Every `MiniNode` contains these helper components initialized inside constructor:
+- `renderer` — `MiniNodeRenderer` struct handling drawing routines.
+- `processor` — `MiniNodeProcessor` struct handling lifecycle events and custom processes.
+- `navigator` — `MiniNodeNavigator` struct (default `noone` unless interactive button).
+- `nav_module` — `MiniNodeNavCenter` struct (default `noone` unless navigator hub).
+- `transform` — `NodeTransform` struct representing final world transform (x, y, scale, rotation, alpha, depth, width, height).
+- `local_transform` — `NodeTransform` struct representing local relative transform.
+- `fixed_transform` — `NodeTransform` struct holding starting/unscaled configurations.
+
+---
+
+## Public Methods
+
+### Hierarchy & Building
+
+#### .node_add(_node1, _node2, ...)
+Add child nodes to this parent.
+- **Parameters:** One or more child `MiniNode` struct instances.
+- **Returns:** Self (for chaining)
+
+#### .node_add_navigation_module()
+Initializes a `MiniNodeNavCenter` component to manage children focus.
+- **Returns:** Self
+
+#### .node_get_children()
+- **Returns:** Array of immediate children.
+
+#### .node_get_all_children()
+- **Returns:** Array of all nested descendants (recursively collected).
+
+#### .node_remove(_node)
+Remove a child node and unregister it from the manager.
+- `_node` — Child node reference to remove.
+- **Returns:** Self
+
+#### .node_get_root()
+- **Returns:** Topmost ancestor in hierarchy (usually a Canvas).
+
+---
+
+### Transform Manipulation
+*Note: All transform modification methods flag the transform as dirty. Recalculation is deferred to the start of the next frame.*
+
+#### .node_set_transform(_x, _y, _xscale, _yscale, _alpha, _angle, _width, _height, _depth)
+Sets all local transform values.
+- `_depth` — Optional (default `0`)
+
+#### .node_set_transform_attribute(_attribute, _value)
+Sets a specific key in both `local_transform` and `fixed_transform`.
+
+#### .transform_set_position(_x, _y)
+#### .transform_set_scale(_xscale, _yscale)
+#### .transform_set_rotation(_rotation)
+#### .transform_set_alpha(_alpha)
+#### .transform_set_depth(_depth)
+#### .transform_set_size(_width, _height)
+#### .transform_set_attribute(_attribute_name, _value)
+
+#### .transform_add_position(_x, _y)
+#### .transform_add_scale(_xscale, _yscale)
+#### .transform_add_rotation(_rotation)
+#### .transform_add_alpha(_alpha)
+#### .transform_add_depth(_depth)
+
+#### .origin_get_converted(_origin_to_convert)
+Calculates position offset `[x_offset, y_offset]` from current origin to target origin.
+
+---
+
+### Visibility, Activation & Lifecycle
+
+#### .set_visible(_visible)
+Toggles rendering visibility of this node.
+- `_visible` — Boolean
+
+#### .show() / .hide()
+Shorthands to set visibility to `true` or `false`.
+
+#### .enable()
+Activates processing and invokes the `on_enabled` event.
+
+#### .disable(_delay)
+Deactivates processing.
+- `_delay` — Optional seconds. If `_delay > 0`, invokes `on_disabling` immediately and `on_disabled` after the delay timer expires.
+
+#### .update()
+Manually invokes the `on_node_updated` event (and dirty flags transforms).
+
+#### .is_enabled()
+#### .is_visible()
+#### .is_initialized()
+
+---
+
+## Component-Specific Methods
+
+### MiniNodeContainer
+
+#### .container_set_spacing(_x, _y)
+Sets gap spacing between cells in pixels.
+
+#### .container_set_padding(_x, _y)
+Sets internal border padding.
+
+#### .container_set_columns(_columns)
+- `_columns` — Columns count (0 = unlimited row list, 1 = column list, N = grid grid)
+
+#### .container_set_flow(_h_flow, _v_flow, _primary_axis)
+Sets horizontal, vertical fills, and primary sorting direction.
+
+#### .container_override_children_origin(_origin)
+Force all children to align within cells using a specified origin. Pass `noone` to preserve children individual origins.
+
+#### .container_set_auto_size(_enabled)
+If true, the container automatically resizes to encapsulate all children.
+
+#### .container_layout()
+Forces immediate recalculation and positioning of children.
+
+---
+
+### MiniNodeSprite
+
+#### .sprite_set_blend(_color)
+Sets image blend color.
+
+#### .sprite_set_image_index(_index)
+Sets active animation index.
+
+#### .sprite_expand_to_size()
+Stretches sprite scale dimensions to match parent node size.
+
+#### .sprite_align_to_node_origin()
+Calculates local offsets to align sprite asset origin with the node's `NODE_ORIGIN`.
+
+---
+
+### MiniNodeText
+
+#### .text_set(_text)
+Sets textual string content.
+
+#### .text_set_alignment(_horizontal, _vertical)
+Standard GameMaker alignment constants (e.g. `fa_center`, `fa_middle`).
+
+#### .text_align_to_node_origin()
+Aligns text alignment parameters matching the node's `NODE_ORIGIN`.
+
+#### .text_set_color(_c1, _c2, _c3, _c4)
+Sets corner gradient colors (accepts 1, 2, or 4 arguments).
+
+#### .text_set_wrap(_wrap_width)
+Sets wrapping width threshold. Set to `-1` to disable.
+
+---
+
+### MiniNodeButton
+
+#### .button_set_text(_text, _font, _width, _color)
+Creates and adds a text node child. Can access via `.text_node`.
+
+#### .button_set_background(_sprite, _color, _fill_size)
+Creates and adds a background sprite node child. Can access via `.background_node`.
+
+---
+
+### MiniNodeRenderer
+
+#### .render_set_custom_draw(_draw_function)
+Sets custom render callback: `function(_node)`
+
+#### .render_clip_draw()
+Constrains children rendering to node dimensions using GPU scissor settings.
+
+---
+
+### MiniNodeProcessor
+
+#### .add_process(_process, _temp, _priority, _make_method)
+Appends function loop executed every frame.
+- `_temp` — If true, function is auto-removed when it returns `true`.
+- `_priority` — Execution priority.
+
+#### .remove_process(_process)
+Removes process loop.
+
+---
+
+### MiniNodeNavigator
+
+#### .set_direction(_direction, _node)
+Binds manual neighbor target.
+- `_direction` — `"up"`, `"down"`, `"left"`, `"right"`
+- `_node` — Target node struct or ID string.
+
+#### .set_directions(_up, _down, _left, _right)
+Sets manual neighbor targets in all four directions.
+
+#### .block_direction(_direction, _blocked)
+#### .block_directions(_up, _down, _left, _right)
+
+---
+
+### MiniNodeNavCenter
+
+#### .select_node(_node)
+#### .deselect_node()
+#### .select_default()
+#### .set_default_node(_node)
+#### .set_tolerance(_tolerance)
+- `_tolerance` — Vertical/horizontal alignment threshold for automatic link mapping (default: `20` pixels).
+
+#### .set_button_input(_enabled)
+#### .set_cursor_input(_enabled)
+#### .rebuild_navigation()
+
+---
+
+## Global NodeManager API
+All global functions are prefixed with `mnd_`. Behind the scenes, they fetch variables of `obj_node_manager`.
+
+### Collection management
+- `mnd_create_node(_node, _enabled, _root)` — Registers a node using a weak reference. If `_root` is true, registers it to receive automatic updates and drawing cycles from the manager.
+- `mnd_remove_node(_node_id)` — De-registers a node.
+- `mnd_get_node(_node_id)` — Fetches node struct reference by ID.
+- `mnd_enable_node(_node, _grab_focus)` — Enables the node. Optionally moves navigator focus.
+- `mnd_disable_node(_node, _delay)` — Disables the node.
+- `mnd_node_exists(_node_id)` — Returns boolean.
+- `mnd_cleanup_dead_refs()` — Forces garbage collection check.
+- `mnd_destroy_all()` — Resets manager.
+
+### Draw Ordering (Roots)
+- `mnd_set_root_draw_order(_id, _index)`
+- `mnd_bring_root_to_front(_id)`
+- `mnd_send_root_to_back(_id)`
+- `mnd_get_all_roots()`
+
+### Focus & Navigation Stack
+- `mnd_nav_set_focus(_node)` — Shifts active navigation module.
+- `mnd_nav_pop_focus()` — Restores focus to the previous menu module in focus history.
+- `mnd_nav_get_focused_module()`
+- `mnd_nav_has_focus(_node)`
+- `mnd_nav_clear_focus()`
+- `mnd_get_selected_node()`
+
+### Input Blocking
+- `mnd_block_button_navigation(_block)`
+- `mnd_block_cursor_navigation(_block)`
+- `mnd_block_button_action(_block)`
+- `mnd_block_cursor_action(_block)`
+- `mnd_block_all_navigation(_block)`
+- `mnd_block_all_actions(_block)`
+- `mnd_block_all_input(_block)`
+
+### Transitioning
+- `mnd_transition(_from_node, _to_node, _delay)` — Disables first node (using delay if requested) and enables target node.
+
+---
+
+## Input Customization
+To overwrite the default keyboard, gamepad, and mouse inputs used by MiniNode, assign new callbacks to the `global.mnd_input` struct:
+
+```gml
+global.mnd_input.cursor_x = function() { return my_custom_x; };
+global.mnd_input.accept_pressed = function() { return my_custom_press(); };
+global.mnd_input.navigate = function() { return [h_axis, v_axis]; };
+```
+
+---
+
+## Changelog
+
+- 1.0.0 — Initial release of the MiniNode system
