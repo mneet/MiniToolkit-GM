@@ -6,7 +6,7 @@
   "name":"MiniEvent",
   "parent":{
     "name":"MiniEvent",
-    "path":"folders/MiniEvent.yy",
+    "path":"folders/MiniToolkit/MiniEvent.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",

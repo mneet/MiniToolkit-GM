@@ -11,7 +11,7 @@
   "overriddenProperties":[],
   "parent":{
     "name":"MiniNode",
-    "path":"folders/MiniNode.yy",
+    "path":"folders/MiniToolkit/MiniNode.yy",
   },
   "parentObjectId":null,
   "persistent":true,

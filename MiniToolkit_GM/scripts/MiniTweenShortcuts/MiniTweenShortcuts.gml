@@ -1,4 +1,4 @@
-/* 
+  /* 
     MiniTween
     A simple tweening system for GameMaker
  
@@ -85,17 +85,4 @@ function mini_tween_pulse(_target, _scale = 1.2, _duration = 0.5, _easing = Ease
 {
 	return mini_tween_scale_to(_target, _scale, _scale, _duration, _easing)
 		.loop(-1, true);
-}
-
-/// @function		mini_tween_flexi(_proxy, _duration)
-/// @description	Create a tween targeting a FlexiElement's local_transform.
-/// @param {Struct.FlexiElement} _proxy	The Element to animate
-/// @param {Real} [_duration]		Duration in seconds
-/// @returns {Struct.MiniTween}
-function mini_tween_flexi(_proxy, _duration = 1.0)
-{
-	return mini_tween(_proxy.local_transform, _duration)
-		.on_update(method({ proxy: _proxy }, function() {
-				proxy.__fi_transform_dirty = true;
-		}));
 }

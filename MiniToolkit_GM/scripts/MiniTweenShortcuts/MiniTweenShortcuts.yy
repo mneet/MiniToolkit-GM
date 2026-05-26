@@ -6,7 +6,7 @@
   "name":"MiniTweenShortcuts",
   "parent":{
     "name":"MiniTween",
-    "path":"folders/MiniTween.yy",
+    "path":"folders/MiniToolkit/MiniTween.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",

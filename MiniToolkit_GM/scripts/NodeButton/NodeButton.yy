@@ -6,7 +6,7 @@
   "name":"NodeButton",
   "parent":{
     "name":"Prefabs",
-    "path":"folders/MiniNode/Utility/Prefabs.yy",
+    "path":"folders/MiniToolkit/MiniNode/Utility/Prefabs.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",

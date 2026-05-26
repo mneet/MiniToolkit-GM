@@ -6,7 +6,7 @@
   "name":"NodeSettings",
   "parent":{
     "name":"MiniNode",
-    "path":"folders/MiniNode.yy",
+    "path":"folders/MiniToolkit/MiniNode.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",

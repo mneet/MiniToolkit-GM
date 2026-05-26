@@ -6,7 +6,7 @@
   "name":"MiniNodeNavCenter",
   "parent":{
     "name":"Components",
-    "path":"folders/MiniNode/NodeStructs/Components.yy",
+    "path":"folders/MiniToolkit/MiniNode/NodeStructs/Components.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",

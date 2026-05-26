@@ -6,7 +6,7 @@
   "name":"NodeAnimator_OBSOLETE",
   "parent":{
     "name":"Utility",
-    "path":"folders/MiniNode/Utility.yy",
+    "path":"folders/MiniToolkit/MiniNode/Utility.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",

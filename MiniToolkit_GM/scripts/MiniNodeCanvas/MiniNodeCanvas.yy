@@ -6,7 +6,7 @@
   "name":"MiniNodeCanvas",
   "parent":{
     "name":"CoreNodes",
-    "path":"folders/MiniNode/NodeStructs/CoreNodes.yy",
+    "path":"folders/MiniToolkit/MiniNode/NodeStructs/CoreNodes.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",

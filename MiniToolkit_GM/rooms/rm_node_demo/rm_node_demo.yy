@@ -18,7 +18,7 @@
   "name":"rm_node_demo",
   "parent":{
     "name":"MiniNode - DEMO",
-    "path":"folders/MiniDemos/MiniNode - DEMO.yy",
+    "path":"folders/MiniToolkit/MiniDemos/MiniNode - DEMO.yy",
   },
   "parentRoom":null,
   "physicsSettings":{

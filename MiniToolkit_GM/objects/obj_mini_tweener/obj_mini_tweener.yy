@@ -10,7 +10,7 @@
   "overriddenProperties":[],
   "parent":{
     "name":"System",
-    "path":"folders/MiniTween/System.yy",
+    "path":"folders/MiniToolkit/MiniTween/System.yy",
   },
   "parentObjectId":null,
   "persistent":true,

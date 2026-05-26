@@ -4,7 +4,7 @@
   "name":"MiniEventDocumentation",
   "parent":{
     "name":"MiniEvent",
-    "path":"folders/MiniEvent.yy",
+    "path":"folders/MiniToolkit/MiniEvent.yy",
   },
   "resourceType":"GMNotes",
   "resourceVersion":"2.0",

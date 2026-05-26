@@ -45,7 +45,7 @@
   "origin":4,
   "parent":{
     "name":"Assets",
-    "path":"folders/MiniDemos/MiniNode - DEMO/Assets.yy",
+    "path":"folders/MiniToolkit/MiniDemos/MiniNode - DEMO/Assets.yy",
   },
   "preMultiplyAlpha":false,
   "resourceType":"GMSprite",

@@ -4,7 +4,7 @@
   "name":"MiniNodeDocumentation",
   "parent":{
     "name":"MiniNode",
-    "path":"folders/MiniNode.yy",
+    "path":"folders/MiniToolkit/MiniNode.yy",
   },
   "resourceType":"GMNotes",
   "resourceVersion":"2.0",

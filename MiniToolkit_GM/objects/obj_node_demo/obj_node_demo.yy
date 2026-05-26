@@ -10,7 +10,7 @@
   "overriddenProperties":[],
   "parent":{
     "name":"MiniNode - DEMO",
-    "path":"folders/MiniDemos/MiniNode - DEMO.yy",
+    "path":"folders/MiniToolkit/MiniDemos/MiniNode - DEMO.yy",
   },
   "parentObjectId":null,
   "persistent":false,

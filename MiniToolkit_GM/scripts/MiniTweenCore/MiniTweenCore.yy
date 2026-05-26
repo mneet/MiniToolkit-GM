@@ -6,7 +6,7 @@
   "name":"MiniTweenCore",
   "parent":{
     "name":"System",
-    "path":"folders/MiniTween/System.yy",
+    "path":"folders/MiniToolkit/MiniTween/System.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",

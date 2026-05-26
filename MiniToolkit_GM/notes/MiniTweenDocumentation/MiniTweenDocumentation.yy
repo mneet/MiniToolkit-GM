@@ -4,7 +4,7 @@
   "name":"MiniTweenDocumentation",
   "parent":{
     "name":"MiniTween",
-    "path":"folders/MiniTween.yy",
+    "path":"folders/MiniToolkit/MiniTween.yy",
   },
   "resourceType":"GMNotes",
   "resourceVersion":"2.0",

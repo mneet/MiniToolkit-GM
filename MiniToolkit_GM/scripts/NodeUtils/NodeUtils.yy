@@ -6,7 +6,7 @@
   "name":"NodeUtils",
   "parent":{
     "name":"InternalSystems",
-    "path":"folders/MiniNode/InternalSystems.yy",
+    "path":"folders/MiniToolkit/MiniNode/InternalSystems.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",

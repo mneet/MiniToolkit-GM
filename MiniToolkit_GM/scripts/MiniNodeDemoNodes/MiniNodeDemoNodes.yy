@@ -6,7 +6,7 @@
   "name":"MiniNodeDemoNodes",
   "parent":{
     "name":"MiniNode - DEMO",
-    "path":"folders/MiniDemos/MiniNode - DEMO.yy",
+    "path":"folders/MiniToolkit/MiniDemos/MiniNode - DEMO.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",
