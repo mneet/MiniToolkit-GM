@@ -4,8 +4,9 @@
 #macro MND_CANVAS_DEFAULT_ORIGIN NODE_ORIGIN.TOP_LEFT
 #macro MND_BUTTON_DEFAULT_ORIGIN NODE_ORIGIN.MIDDLE_CENTER
 #macro MND_CONTAINER_DEFAULT_ORIGIN NODE_ORIGIN.MIDDLE_CENTER
+#macro MND_CANVAS_AUTO_ROOT true			// MiniNodeCanvas registers itself as a root node
 
-// DEBUG - Set to true to enable by default
+// DEBUG - Initial values (toggle at runtime with mnd_debug_set)
 #macro MND_DEBUG_SIZE false
 #macro MND_DEBUG_ORIGIN false
 
@@ -18,6 +19,20 @@ enum MND_NAV_INPUT
 	BUTTON,		// Gamepad/Keyboard navigation
 	CURSOR		// Mouse/Touch navigation
 }
+
+// Navigation group mode
+enum NODE_NAV_MODE
+{
+	AUTO,		// Links are calculated from the layout (manual links still have priority)
+	MANUAL		// Only links set by code are used
+}
+
+// NAVIGATION GROUP DEFAULTS
+#macro MND_NAV_DEFAULT_MODE NODE_NAV_MODE.AUTO
+#macro MND_NAV_DEFAULT_WRAP_H false
+#macro MND_NAV_DEFAULT_WRAP_V false
+#macro MND_NAV_AUTO_FOCUS true			// Groups take focus when enabled if no group has focus
+#macro MND_NAV_REMEMBER_LAST true		// Groups reselect the last selected item when focus comes back
 
 #region Input System
 

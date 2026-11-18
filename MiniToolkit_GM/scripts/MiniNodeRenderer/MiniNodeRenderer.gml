@@ -17,17 +17,27 @@ function MiniNodeRenderer(_owner = noone) constructor
 	{
 		if (__skip_draw) return;
 		if (!owner.visible || !owner.is_enabled()) return;
-		
-		// Save current scissor state for restoration
-		var _scissor = gpu_get_scissor();
-		
-		// Apply clipping if enabled
+		if (!owner.processor.is_initialized) return; // Never draw before the init phases ran
+
+		// Resolve transform changes made after the step (e.g. on_enabled fired by an input/transition handler),
+		// otherwise the node is drawn one frame with its stale transform. Parent resolves before children.
+		owner.__resolve_transform();
+
+		// Clipping: only touch the scissor when this node clips (no per-node GPU state/allocations otherwise)
+		var _scissor = undefined;
 		if (__clip_node_content)
 		{
-			var _x = owner.transform.x + owner.sys_origin_offset[0],
-				_y = owner.transform.y + owner.sys_origin_offset[1];
+			_scissor = gpu_get_scissor();
 			
-			gpu_set_scissor(_x, _y, owner.transform.width, owner.transform.height);
+			// Intersect with the current scissor so nested clips never escape their parent clip
+			var _x1 = owner.transform.x + owner.sys_origin_offset[0],
+				_y1 = owner.transform.y + owner.sys_origin_offset[1];
+			var _x2 = min(_x1 + owner.transform.width, _scissor.x + _scissor.w),
+				_y2 = min(_y1 + owner.transform.height, _scissor.y + _scissor.h);
+			_x1 = max(_x1, _scissor.x);
+			_y1 = max(_y1, _scissor.y);
+			
+			gpu_set_scissor(_x1, _y1, max(0, _x2 - _x1), max(0, _y2 - _y1));
 		}
 		
 		// Draw self
@@ -44,12 +54,12 @@ function MiniNodeRenderer(_owner = noone) constructor
 			_children[_i].renderer.__draw_node();
 		}
 			
-		// Reset scissor
-		gpu_set_scissor(_scissor);
+		// Restore scissor
+		if (_scissor != undefined) gpu_set_scissor(_scissor);
 		
 		// DEBUG DRAWS
-		if (MND_DEBUG_SIZE) debug_draw_size();
-		if (MND_DEBUG_ORIGIN) debug_draw_origin();
+		if (global.__mnd_debug.draw_size) debug_draw_size();
+		if (global.__mnd_debug.draw_origin) debug_draw_origin();
 	}
 	
 	#region DEBUG

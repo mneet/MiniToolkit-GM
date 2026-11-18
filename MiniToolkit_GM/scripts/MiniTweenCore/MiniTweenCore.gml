@@ -3,19 +3,21 @@
     A simple tweening system for GameMaker
  
     Authors: M. Neet - https://github.com/mneet/MiniToolkit-GM
-    Version: 2.0.0
+    Version: 2.0.1
 */
 
 #region Manager
 
-/// @function		__mini_tween_ensure_manager()
-/// @description	Ensure the tween manager object exists
-function __mini_tween_ensure_manager()
+/// @function		__mini_tween_manager()
+/// @description	Get the tween manager instance, creating it if needed
+/// @returns {Id.Instance}
+function __mini_tween_manager()
 {
 	if (!instance_exists(obj_mini_tweener))
 	{
 		instance_create_depth(0, 0, 0, obj_mini_tweener);
 	}
+	return obj_mini_tweener;
 }
 
 #endregion
@@ -61,6 +63,9 @@ function MiniTween(_target, _duration = 1.0) constructor
 	__on_complete = undefined;
 	__on_loop = undefined;
 	__on_cancel = undefined;
+	
+	// Internal update hook used by integrations (e.g. mini_tween_node), independent from the user's on_update
+	__on_update_internal = undefined;
 	
 	#region Builder Methods
 	
@@ -305,7 +310,8 @@ function MiniTween(_target, _duration = 1.0) constructor
 			}
 		}
 		
-		// Notify on_update callback (for integration with other systems)
+		// Internal integration hook first, then the user's on_update
+		if (__on_update_internal != undefined) __on_update_internal(_target, _progress);
 		if (__on_update != undefined) __on_update(_target, _progress);
 		
 		// Handle completion
@@ -383,9 +389,8 @@ function MiniTween(_target, _duration = 1.0) constructor
     
 	#endregion
 	
-	// Auto-register with manager
-	static _ensure = __mini_tween_ensure_manager();
-	array_push(obj_mini_tweener.tweens, self);
+	// Auto-register with manager (created if missing, e.g. after being destroyed)
+	array_push(__mini_tween_manager().tweens, self);
     
 }
 

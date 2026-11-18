@@ -8,7 +8,7 @@ THIS DOCUMENTATION WAS WRITTEN BY AI, IT MAY CONTAIN ERRORS
 
 **Author:** M. Neet - https://github.com/mneet/MiniToolkit-GM
 
-**Version:** 2.0.0
+**Version:** 2.0.1
 
 ---
 
@@ -212,6 +212,7 @@ Gets the number of active tweens.
 
 ## Changelog
 
+- 2.0.1 — Manager created on demand (utility functions no longer crash without it), tweens created inside callbacks are no longer dropped, `mini_tween_node` uses an internal hook (user `on_update` is free)
 - 1.0.0 — Initial system
 
 ---

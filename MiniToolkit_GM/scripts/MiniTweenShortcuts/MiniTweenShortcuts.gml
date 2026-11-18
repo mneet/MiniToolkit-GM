@@ -3,7 +3,7 @@
     A simple tweening system for GameMaker
  
     Authors: M. Neet - https://github.com/mneet/MiniToolkit-GM
-    Version: 2.0.0
+    Version: 2.0.1
 */
 
 /// @function		mini_tween_node(_node, _duration)
@@ -14,10 +14,13 @@
 /// @returns {Struct.MiniTween}
 function mini_tween_node(_node, _duration = 1.0)
 {
-	return mini_tween(_node.local_transform, _duration)
-		.on_update(function(_target, _progress) {
-			_target.owner.__mark_transform_dirty();
-		});
+	var _tween = mini_tween(_node.local_transform, _duration);
+	
+	// Internal hook: the user can still chain .on_update() without breaking the node update
+	_tween.__on_update_internal = function(_target, _progress) {
+		_target.owner.__mark_transform_dirty();
+	};
+	return _tween;
 }
 
 /// @function		mini_tween_to(_target, _duration, _props, _easing)

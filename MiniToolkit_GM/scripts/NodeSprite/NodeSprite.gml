@@ -10,7 +10,7 @@ function MiniNodeSprite(_name, _sprite, _color = c_white, _animate = false, _ori
 	// Sprite attributes
 	sprite_index = _sprite;
 	image_index = 0;
-	image_blend = c_white;
+	image_blend = _color;
 	animate = _animate;
     
     sprite_xscale = 1;

@@ -7,7 +7,7 @@ THIS DOCUMENTATION WAS WRITTEN BY AI, IT MAY CONTAIN ERRORS
 **MiniNode** is a modular, component-based user interface (UI) system for GameMaker. It facilitates UI hierarchy creation, transform inheritance (position, scale, rotation, alpha), deferred drawing, event-driven architecture, and automatic keyboard/gamepad/mouse directional navigation.
 
 **Author:** M. Neet - https://github.com/mneet/MiniToolkit-GM
-**Version:** 1.0.0
+**Version:** 1.1.0
 
 ---
 
@@ -55,10 +55,11 @@ Creates the base element with transform, rendering, and processing components.
 - `_origin` — Optional `NODE_ORIGIN` (default: `MIDDLE_CENTER`)
 - **Returns:** Struct (MiniNode instance)
 
-### MiniNodeCanvas(_name, _origin)
-Organizational root node that can be registered in the NodeManager.
-- `_name` — Unique string identifier
+### MiniNodeCanvas(_name, _origin, _auto_root)
+Organizational root node. Registers itself as a root in the NodeManager (processed and drawn in Draw GUI).
+- `_name` — Globally unique string identifier (roots are registered for `mnd_node_get`)
 - `_origin` — Optional `NODE_ORIGIN` (default: `TOP_LEFT`)
+- `_auto_root` — Optional, register as root automatically (default: `MND_CANVAS_AUTO_ROOT` = true). To start hidden, call `mnd_hide(canvas)` or `mnd_root_add(canvas, false)`.
 - **Returns:** Struct (MiniNodeCanvas instance)
 
 ### MiniNodeContainer(_name, _columns, _origin)
@@ -87,7 +88,7 @@ A node that renders text with custom alignment and optional wrapping.
 - **Returns:** Struct (MiniNodeText instance)
 
 ### MiniNodeButton(_name, _origin)
-Interactive button node that handles selection, triggers action events, and automatically binds a navigator component.
+Interactive button node that handles selection, triggers action events, and automatically creates a `MiniNodeNavItem` (`nav_item`). Use `button_is_pressed()` to check if it is held.
 - `_name` — Unique string identifier
 - `_origin` — Optional `NODE_ORIGIN` (default: `MIDDLE_CENTER`)
 - **Returns:** Struct (MiniNodeButton instance)
@@ -98,8 +99,8 @@ Interactive button node that handles selection, triggers action events, and auto
 Every `MiniNode` contains these helper components initialized inside constructor:
 - `renderer` — `MiniNodeRenderer` struct handling drawing routines.
 - `processor` — `MiniNodeProcessor` struct handling lifecycle events and custom processes.
-- `navigator` — `MiniNodeNavigator` struct (default `noone` unless interactive button).
-- `nav_module` — `MiniNodeNavCenter` struct (default `noone` unless navigator hub).
+- `nav_item` — `MiniNodeNavItem` struct (default `noone`; makes the node selectable by a navigation group).
+- `nav_group` — `MiniNodeNavGroup` struct (default `noone`; makes the node control navigation of the items in its subtree).
 - `transform` — `NodeTransform` struct representing final world transform (x, y, scale, rotation, alpha, depth, width, height).
 - `local_transform` — `NodeTransform` struct representing local relative transform.
 - `fixed_transform` — `NodeTransform` struct holding starting/unscaled configurations.
@@ -115,9 +116,16 @@ Add child nodes to this parent.
 - **Parameters:** One or more child `MiniNode` struct instances.
 - **Returns:** Self (for chaining)
 
-#### .node_add_navigation_module()
-Initializes a `MiniNodeNavCenter` component to manage children focus.
-- **Returns:** Self
+#### .node_add_nav_group()
+Attaches a `MiniNodeNavGroup` to this node (any node can have one).
+- **Returns:** The `MiniNodeNavGroup` (for chaining its configuration)
+
+#### .node_add_nav_item()
+Makes this node selectable by the navigation group above it.
+- **Returns:** The `MiniNodeNavItem`
+
+#### .node_focus() / .node_unfocus()
+Steal / release the navigation focus for this node's group.
 
 #### .node_get_children()
 - **Returns:** Array of immediate children.
@@ -126,9 +134,18 @@ Initializes a `MiniNodeNavCenter` component to manage children focus.
 - **Returns:** Array of all nested descendants (recursively collected).
 
 #### .node_remove(_node)
-Remove a child node and unregister it from the manager.
+Detach a child node (not destroyed; it can be added somewhere else). Navigation focus inside it is released.
 - `_node` — Child node reference to remove.
 - **Returns:** Self
+
+#### .node_find(_id)
+Find a node by id inside this subtree (this node included). Ids only need to be unique inside the subtree you search, so prefabs can be instantiated many times.
+- **Returns:** Node or `noone`
+
+#### .node_destroy()
+Destroy the node and its subtree: fires `on_destroy`, cancels the pending delayed disable, releases navigation focus, and removes it from its parent, the roots, the registry and the screen stack.
+
+#### .is_destroyed()
 
 #### .node_get_root()
 - **Returns:** Topmost ancestor in hierarchy (usually a Canvas).
@@ -186,6 +203,18 @@ Manually invokes the `on_node_updated` event (and dirty flags transforms).
 #### .is_enabled()
 #### .is_visible()
 #### .is_initialized()
+
+### Initialization phases
+The first time a node is processed, its whole uninitialized subtree is initialized **in the same frame, before it is ever drawn**:
+
+1. `processor.on_init` (top-down) — setup that depends on construction (e.g. text size).
+2. Transform resolve (top-down).
+3. Layout (bottom-up) — `__layout()` hook; `MiniNodeContainer` organizes its children here.
+4. Transform resolve (top-down) — applies the layout.
+5. `processor.on_ready` (top-down) — size, layout and transforms are final. Use it for logic that needs final positions.
+6. `on_enabled` (top-down) — only for nodes that start enabled (entry animations, navigation auto focus).
+
+Disabled nodes run phases 1–5 and get `on_enabled` later, when enabled. Transforms are resolved every step and again right before drawing, so changes made by input/event handlers are visible in the same frame.
 
 ---
 
@@ -283,74 +312,139 @@ Removes process loop.
 
 ---
 
-### MiniNodeNavigator
+## Navigation
 
-#### .set_direction(_direction, _node)
-Binds manual neighbor target.
-- `_direction` — `"up"`, `"down"`, `"left"`, `"right"`
-- `_node` — Target node struct or ID string.
+### Concepts
+- **Navigation group** (`MiniNodeNavGroup`, `node.nav_group`): attached to any node. Controls every `MiniNodeNavItem` in its subtree, except subtrees that have their own group.
+- **Navigation item** (`MiniNodeNavItem`, `node.nav_item`): a selectable node (buttons create one automatically).
+- **Focus stack**: only the group on top of the stack receives input. `mnd_nav_steal_focus` pushes a group on top; `mnd_nav_release_focus` removes it and focus returns to the previous valid group. Disabling (including the start of a delayed disable) or removing a node releases its focus automatically.
+- **Modes**: `NODE_NAV_MODE.AUTO` calculates neighbours from the layout and caches them; `NODE_NAV_MODE.MANUAL` only uses links set by code. Manual links always have priority and are never overwritten by the automatic ones.
+- **Cache**: automatic links are rebuilt lazily when the group is dirty (nodes added/removed, container layout, mode/wrap change). After moving items by code, call `nav_refresh()`. The calculation uses unscaled layout positions, so scale/alpha animations do not affect navigation. Unavailable items (disabled or `selectable = false`) are skipped at input time by following their link in the same direction.
 
-#### .set_directions(_up, _down, _left, _right)
-Sets manual neighbor targets in all four directions.
+```gml
+var _group = menu.node_add_nav_group()
+    .nav_set_wrap(false, true)
+    .nav_set_default("btn_play");
 
-#### .block_direction(_direction, _blocked)
-#### .block_directions(_up, _down, _left, _right)
+// Manual links (have priority over automatic ones)
+_group.nav_link(btn_a, "right", btn_b);           // bidirectional by default
+_group.nav_link_list([btn_a, btn_b, btn_c], NODE_AXIS.VERTICAL, true);
+_group.nav_link_grid(level_buttons, 5, true, false);
 
----
+// Popups: steal focus, release to go back
+mnd_show("popup");    // enable + steal focus
+mnd_hide("popup");    // focus returns to the previous group
+```
 
-### MiniNodeNavCenter
+### MiniNodeNavGroup
 
-#### .select_node(_node)
-#### .deselect_node()
-#### .select_default()
-#### .set_default_node(_node)
-#### .set_tolerance(_tolerance)
-- `_tolerance` — Vertical/horizontal alignment threshold for automatic link mapping (default: `20` pixels).
+#### Configuration (all return self)
+- `.nav_set_mode(_mode)` — `NODE_NAV_MODE.AUTO` (default) or `MANUAL`.
+- `.nav_set_wrap(_horizontal, _vertical)` — Wrap-around for automatic links (default off).
+- `.nav_set_default(_node)` — Item selected when the group gains focus (default: first available).
+- `.nav_set_auto_focus(_enabled)` — Take focus when the owner is enabled and no group has focus (default true).
+- `.nav_set_remember_last(_enabled)` — Reselect the last item when focus comes back (default true).
+- `.nav_set_button_input(_enabled)` / `.nav_set_cursor_input(_enabled)`
 
-#### .set_button_input(_enabled)
-#### .set_cursor_input(_enabled)
-#### .rebuild_navigation()
+#### Manual links
+- `.nav_link(_from, _direction, _to, _bidirectional = true)`
+- `.nav_link_list(_nodes, _axis = NODE_AXIS.VERTICAL, _wrap = false)`
+- `.nav_link_grid(_nodes, _columns, _wrap_h = false, _wrap_v = false)` — Edges without wrap stay unlinked and fall back to automatic links in AUTO mode.
+
+#### Cache & queries
+- `.nav_refresh()` — Recollect items and rebuild automatic links.
+- `.nav_get_items()` — Array of item nodes.
+- `.get_neighbor(_node, _direction)` — Node reached from an item (blocked > manual > automatic, skipping unavailable items).
+
+#### Selection & focus
+- `.select(_node)`, `.deselect()`, `.select_default()`
+- `.has_focus()`
+- `selected` — Currently selected node.
+- Events: `on_focus_gained`, `on_focus_lost`.
+
+### MiniNodeNavItem
+- `.set_link(_direction, _node)` — Manual link (`noone` clears).
+- `.set_links(_up, _down, _left, _right)` — `undefined` keeps, `noone` clears.
+- `.clear_links()`
+- `.block(_direction, _blocked = true)`, `.block_all(_up, _down, _left, _right)`
+- `.set_selectable(_selectable)`, `.is_available()`
+- `.consume_navigation()` — Call inside `on_navigated` to cancel the default movement (e.g. slider changing value with left/right).
+- `.focus_group()` — Steal focus for the owning group.
+- State: `group`, `is_selected`, `is_pressed`.
+- Events: `on_selected`, `on_deselected`, `on_action_pressed`, `on_action_released`, `on_navigated(x, y)`.
 
 ---
 
 ## Global NodeManager API
-All global functions are prefixed with `mnd_`. Behind the scenes, they fetch variables of `obj_node_manager`.
+Global functions use the `mnd_` prefix with sub-namespaces. The manager (`obj_node_manager`) is created on demand. Every function accepts a node reference or a node id and returns `noone` when nothing is found.
 
-### Collection management
-- `mnd_create_node(_node, _enabled, _root)` — Registers a node using a weak reference. If `_root` is true, registers it to receive automatic updates and drawing cycles from the manager.
-- `mnd_remove_node(_node_id)` — De-registers a node.
-- `mnd_get_node(_node_id)` — Fetches node struct reference by ID.
-- `mnd_enable_node(_node, _grab_focus)` — Enables the node. Optionally moves navigator focus.
-- `mnd_disable_node(_node, _delay)` — Disables the node.
-- `mnd_node_exists(_node_id)` — Returns boolean.
-- `mnd_cleanup_dead_refs()` — Forces garbage collection check.
-- `mnd_destroy_all()` — Resets manager.
+### Roots (`NodeManager`)
+Roots are processed and drawn by the manager (Draw GUI), back to front.
+- `mnd_root_add(_node, _enabled = true)` — Register a parentless node as root (also registers it for lookup). On an existing root, only applies `_enabled = false`.
+- `mnd_root_remove(_node)` — Stop processing/drawing it (not destroyed).
+- `mnd_root_is(_node)`
+- `mnd_root_get_all()` — Roots in draw order.
+- `mnd_root_set_order(_node, _index)` — `0` = back, `-1` = front.
+- `mnd_root_bring_to_front(_node)` / `mnd_root_send_to_back(_node)`
 
-### Draw Ordering (Roots)
-- `mnd_set_root_draw_order(_id, _index)`
-- `mnd_bring_root_to_front(_id)`
-- `mnd_send_root_to_back(_id)`
-- `mnd_get_all_roots()`
+### Nodes & lookup (`NodeManager`)
+Only roots and nodes registered with `mnd_node_register` need globally unique ids. Other nodes are found by searching the root subtrees, or locally with `node.node_find(id)`.
+- `mnd_node_register(_node)` / `mnd_node_unregister(_node)`
+- `mnd_node_get(_id)` — Registry first, then a search through every root subtree.
+- `mnd_node_exists(_id)`
+- `mnd_node_enable(_node)` / `mnd_node_disable(_node, _delay = 0)`
+- `mnd_node_destroy(_node)`
+- `mnd_destroy_all()` — Destroy every root and reset focus, screens, input blocks and mode.
 
-### Focus & Navigation Stack
-- `mnd_nav_set_focus(_node)` — Shifts active navigation module.
-- `mnd_nav_pop_focus()` — Restores focus to the previous menu module in focus history.
-- `mnd_nav_get_focused_module()`
-- `mnd_nav_has_focus(_node)`
+### Show, hide & transitions (`NodeManagerScreens`)
+- `mnd_show(_node, _focus = true)` — Enable and steal navigation focus (popup pattern).
+- `mnd_hide(_node, _delay = 0)` — Disable (focus is released immediately).
+- `mnd_transition(_from, _to, _delay = 0)` — Disable `_from`; when disabled, show `_to` with focus. Input is blocked meanwhile.
+
+### Screen stack (`NodeManagerScreens`)
+```gml
+mnd_screen_push(main_menu);                 // base screen
+mnd_screen_push("menu_options");            // transition: hides main menu, shows options
+mnd_screen_push("exit_popup", false);       // popup over the current screen
+mnd_screen_pop();                           // back to the previous screen
+```
+- `mnd_screen_push(_node, _hide_current = true, _delay = 0)`
+- `mnd_screen_pop(_delay = 0)` — Returns the screen that is now current.
+- `mnd_screen_replace(_node, _delay = 0)` — Replace the current screen.
+- `mnd_screen_get_current()` / `mnd_screen_get_count()` / `mnd_screen_clear()`
+
+### Navigation focus (`NodeManagerFocus`)
+- `mnd_nav_steal_focus(_node)` — Push the node's group on top of the focus stack.
+- `mnd_nav_release_focus(_node = focused)` — Remove the node from the stack; focus returns to the previous valid group.
 - `mnd_nav_clear_focus()`
-- `mnd_get_selected_node()`
+- `mnd_nav_get_focused_node()` / `mnd_nav_get_focused_group()`
+- `mnd_nav_has_focus(_node)`
+- `mnd_nav_get_selected_node()`
 
-### Input Blocking
-- `mnd_block_button_navigation(_block)`
-- `mnd_block_cursor_navigation(_block)`
-- `mnd_block_button_action(_block)`
-- `mnd_block_cursor_action(_block)`
-- `mnd_block_all_navigation(_block)`
-- `mnd_block_all_actions(_block)`
-- `mnd_block_all_input(_block)`
+### Input (`NodeManagerInput`)
+- Mode: `mnd_input_get_mode()`, `mnd_input_set_mode(_mode, _lock = false)`, `mnd_input_unlock_mode()`, `mnd_input_is_cursor()`, `mnd_input_is_button()`.
+- Blocking (reference counted per flag; every block needs a matching unblock with the same flags):
+  - `enum MND_BLOCK { BUTTON_NAV, CURSOR_NAV, BUTTON_ACTION, CURSOR_ACTION, NAV, ACTION, ALL }`
+  - `mnd_input_block(_flags = MND_BLOCK.ALL)` / `mnd_input_unblock(_flags = MND_BLOCK.ALL)`
+  - `mnd_input_is_blocked(_flags = MND_BLOCK.ALL)` — True if any of the flags is blocked.
+  - `mnd_input_is_nav_blocked()` / `mnd_input_is_action_blocked()` — For the current mode.
+  - `mnd_input_reset_blocks()` — Emergency reset.
+- Consumption: `mnd_input_consume()` (ignore UI navigation and actions this frame), `mnd_input_is_consumed()`.
 
-### Transitioning
-- `mnd_transition(_from_node, _to_node, _delay)` — Disables first node (using delay if requested) and enables target node.
+### Global events
+`global.mnd_events` holds MiniEvents:
+- `input_mode_changed(mode)` — e.g. swap keyboard/gamepad prompts.
+- `focus_changed(focused_node, previous_node)` — either may be `noone`.
+
+```gml
+global.mnd_events.input_mode_changed.connect(id, function(_mode) {
+    show_prompts(_mode == MND_NAV_INPUT.BUTTON);
+});
+```
+
+### Debug
+- `mnd_debug_set(_draw_size, _draw_origin = _draw_size)` — Toggle bounding box / origin drawing at runtime (`MND_DEBUG_*` macros are the initial values).
+- `mnd_debug_print_tree(_node = all roots)` — Print the hierarchy with ids, types, positions, sizes and state flags.
 
 ---
 
@@ -367,4 +461,12 @@ global.mnd_input.navigate = function() { return [h_axis, v_axis]; };
 
 ## Changelog
 
+- 1.1.0 — Navigation, lifecycle and NodeManager refactor
+  - Navigation rebuilt as `MiniNodeNavGroup` (attachable to any node) + `MiniNodeNavItem`, with a focus stack, AUTO/MANUAL modes, cached automatic links (`nav_refresh()`) and manual link helpers.
+  - Same-frame initialization phases (`on_init`, layout, `on_ready`, `on_enabled`) replace the frame-delayed `on_post_init`.
+  - Transforms resolved on step and before drawing (no one-frame flashes).
+  - NodeManager split into Roots/Nodes, Input, Focus and Screens APIs (`mnd_root_*`, `mnd_node_*`, `mnd_input_*`, `mnd_nav_*`, `mnd_show/hide`, `mnd_screen_*`), with screen stack, reference-counted input blocks, global events and runtime debug tools.
+  - `MiniNodeCanvas` auto-registers as root; only roots/registered nodes need globally unique ids; `node_find`, `node_destroy`.
+  - Fixes: deep copy caused by `variable_clone` on transforms, per-node scissor save/restore and nested clips, container layout double scaling, sprite color parameter ignored, text wrapping overwriting the raw text.
+  - Breaking: API renamed (see Navigation and Global NodeManager API sections).
 - 1.0.0 — Initial release of the MiniNode system

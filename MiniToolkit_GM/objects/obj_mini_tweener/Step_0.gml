@@ -19,8 +19,15 @@ for (var _i = 0; _i < _count; _i++)
     tweens[_write_idx++] = _tween;
 }
 
-// Resize array to remove tweens
-if (_write_idx < _count)
+// Keep tweens created by callbacks during this step (appended after _count)
+var _total = array_length(tweens);
+for (var _i = _count; _i < _total; _i++)
+{
+    tweens[_write_idx++] = tweens[_i];
+}
+
+// Resize array to remove finished tweens
+if (_write_idx < _total)
 {
     array_resize(tweens, _write_idx);
 }

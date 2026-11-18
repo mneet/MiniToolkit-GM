@@ -6,7 +6,7 @@ node_main_menu = new MiniNodeCanvas("menu_main", NODE_ORIGIN.TOP_LEFT);
 
 with (node_main_menu)
 {
-	node_add_navigation_module();
+	node_add_nav_group();
 	node_set_transform(0, 0, 1, 1, 1, 0, 1280, 720);
 	
 	var _gui_w = display_get_gui_width(),
@@ -52,7 +52,7 @@ with (node_main_menu)
 			with (_btn_play)
 			{
 				on_button_released.connect(self, function() {
-					mnd_transition("menu_main", "menu_level_select");
+					mnd_screen_push("menu_level_select");
 				});
 			}
 			
@@ -61,7 +61,7 @@ with (node_main_menu)
 			with (_btn_options)
 			{
 				on_button_released.connect(self, function() {
-					mnd_transition("menu_main", "menu_options");
+					mnd_screen_push("menu_options");
 				});
 			}
 			
@@ -70,7 +70,8 @@ with (node_main_menu)
 			with (_btn_exit)
 			{
 				on_button_released.connect(self, function() {				
-					mnd_enable_node("exit_popup", true);
+					// Popup: keeps the main menu visible below and steals the focus
+					mnd_screen_push("exit_popup", false);
 				});
 			}
 			
@@ -82,8 +83,8 @@ with (node_main_menu)
 	node_add(_title, _frame);
 }
 
-// Add to root
-mnd_create_node(node_main_menu);
+// Canvases register themselves as roots. The main menu is the base screen of the screen stack.
+mnd_screen_push(node_main_menu);
 
 #endregion
 
@@ -93,7 +94,7 @@ mnd_create_node(node_main_menu);
 exit_popup = new MiniNode("exit_popup")
 with (exit_popup)
 {
-	node_add_navigation_module();
+	node_add_nav_group();
 	node_set_transform(0, 0, 1, 1, 1, 0, 1280, 720);	
 	
 	// Main Menu Frame
@@ -132,8 +133,8 @@ with (exit_popup)
 			with (_btn_no)
 			{
 				on_button_released.connect(self, function() {
-					mnd_disable_node("exit_popup");
-					mnd_nav_pop_focus();
+					// Closing the popup gives the focus back to the main menu
+					mnd_screen_pop();
 				});
 			}
 
@@ -147,8 +148,8 @@ with (exit_popup)
 	node_add(_frame);	
 }
 
-// Add to root
-mnd_create_node(exit_popup, false);
+// Plain MiniNode: register as root manually, starting hidden
+mnd_root_add(exit_popup, false);
 
 #endregion
 
@@ -157,7 +158,7 @@ mnd_create_node(exit_popup, false);
 var _menu_options = new MiniNodeCanvas("menu_options", NODE_ORIGIN.TOP_LEFT);
 with (_menu_options)
 {
-	node_add_navigation_module();
+	node_add_nav_group();
 	node_set_transform(0, 0, 1, 1, 1, 0, 1280, 720);
 	
 	// Title
@@ -222,7 +223,7 @@ with (_menu_options)
 			with (_btn_back)
 			{
 				on_button_released.connect(self, function() {
-					mnd_transition("menu_options", "menu_main");
+					mnd_screen_pop();
 				});
 			}
 			
@@ -233,7 +234,7 @@ with (_menu_options)
 	
 	node_add(_title, _frame);
 }
-mnd_create_node(_menu_options, false);
+mnd_hide(_menu_options); // Canvas is already a root, start hidden
 
 #endregion
 
@@ -242,7 +243,8 @@ mnd_create_node(_menu_options, false);
 var _menu_level_select = new MiniNodeCanvas("menu_level_select", NODE_ORIGIN.TOP_LEFT);
 with (_menu_level_select)
 {
-	node_add_navigation_module();
+	var _level_group = node_add_nav_group();
+	var _level_buttons = [];
 	node_set_transform(0, 0, 1, 1, 1, 0, 1280, 720);
 	
 	// Title
@@ -298,6 +300,7 @@ with (_menu_level_select)
 						});
 					}
 					node_add(_btn_lvl);
+					array_push(_level_buttons, _btn_lvl);
 				}
 			}
 			
@@ -306,17 +309,50 @@ with (_menu_level_select)
 			with (_btn_back)
 			{
 				on_button_released.connect(self, function() {
-					mnd_transition("menu_level_select", "menu_main");
+					mnd_screen_pop();
 				});
 			}
 			
 			node_add(_grid, _btn_back);
+			
+			// Manual navigation example: grid links with horizontal wrap.
+			// Edges without links (e.g. down from the last row) fall back to the automatic navigation (BACK button).
+			_level_group.nav_link_grid(_level_buttons, 5, true, false);
 		}
 		node_add(_v_container);
 	}
 	
 	node_add(_title, _frame);
 }
-mnd_create_node(_menu_level_select, false);
+mnd_hide(_menu_level_select);
+
+#endregion
+
+#region 5. Debug tools
+
+// F1 bounding boxes | F2 origins | F3 print tree | F4 print focus/screens | F5 toggle input block | F12 hide panel
+debug_draw_size = false;
+debug_draw_origin = false;
+debug_input_blocked = false;
+debug_show_panel = false;	// F12 to show
+debug_log = [];		// Last global events, shown in the panel
+
+debug_push_log = function(_text)
+{
+	array_insert(debug_log, 0, _text);
+	if (array_length(debug_log) > 5) array_resize(debug_log, 5);
+	show_debug_message($"[Demo] {_text}");
+}
+
+// Global MiniNode events (connection = this instance; dropped automatically when it is destroyed)
+global.mnd_events.input_mode_changed.connect(id, function(_mode) {
+	debug_push_log($"input_mode_changed -> {(_mode == MND_NAV_INPUT.BUTTON) ? "BUTTON" : "CURSOR"}");
+});
+
+global.mnd_events.focus_changed.connect(id, function(_focused, _previous) {
+	var _new = (_focused != noone) ? _focused.id : "none";
+	var _old = (_previous != noone) ? _previous.id : "none";
+	debug_push_log($"focus_changed -> {_new} (was {_old})");
+});
 
 #endregion

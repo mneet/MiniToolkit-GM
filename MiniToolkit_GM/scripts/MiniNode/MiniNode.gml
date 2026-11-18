@@ -41,8 +41,8 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
 	// Components 
 	renderer = new MiniNodeRenderer(self);
 	processor = new MiniNodeProcessor(self);
-	navigator = noone;
-	nav_module = noone;		// MiniNodeNavCenter — if set, this node manages navigation for its children
+	nav_item = noone;		// MiniNodeNavItem — if set, this node can be selected by a navigation group
+	nav_group = noone;		// MiniNodeNavGroup — if set, this node controls navigation for the items in its subtree
 	
     // Transform
 	transform = new NodeTransform(self);
@@ -56,9 +56,10 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
     on_enabled = new MiniEvent();
 	on_disabling = new MiniEvent();
     on_disabled = new MiniEvent();
+	on_destroy = new MiniEvent();		// Fired once by node_destroy(), before children are destroyed
 	
     // System flags
-	__node_init_block = true;
+	__destroyed = false;
 	__transform_dirty = false;
     enabled = true;
 	visible = true;
@@ -79,23 +80,102 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
 			{
 				throw("MiniNode cannot be added to itself");
 			}
+			
+			// A node lives in a single place: detach from the old parent / root list
+			if (_node.parent != noone)
+			{
+				_node.parent.node_remove(_node);
+			}
+			if (mnd_root_is(_node))
+			{
+				show_debug_message($"[MiniNode] '{_node.id}' was a root node and is now a child of '{id}'");
+				mnd_root_remove(_node);
+			}
             
             _node.parent = self;
             _node.__sibling_index = array_length(__nested_nodes);
             array_push(__nested_nodes, _node);
-            
-            mnd_create_node(_node, true, false);
-		}		
+		}
+
+		__nav_mark_dirty();
 		return self;
+	}
+
+	#region NAVIGATION
+
+	///@function						node_add_nav_group()
+	///@description						Attach a navigation group to this node, controlling the items in its subtree
+	///@returns {Struct.MiniNodeNavGroup}	The navigation group (for chaining its configuration)
+	static node_add_nav_group = function()
+	{
+		if (nav_group == noone)
+		{
+			nav_group = new MiniNodeNavGroup(self);
+
+			// This subtree no longer belongs to the group above
+			if (parent != noone) parent.__nav_mark_dirty();
+		}
+		return nav_group;
+	}
+
+	///@function						node_add_nav_item()
+	///@description						Make this node selectable by a navigation group
+	///@returns {Struct.MiniNodeNavItem}	The navigation item
+	static node_add_nav_item = function()
+	{
+		if (nav_item == noone)
+		{
+			nav_item = new MiniNodeNavItem(self);
+			if (parent != noone) parent.__nav_mark_dirty();
+		}
+		return nav_item;
+	}
+
+	///@function			node_focus()
+	///@description			Steal the navigation focus for this node's group
+	///@returns {Bool}		True if focused
+	static node_focus = function()
+	{
+		return mnd_nav_steal_focus(self);
+	}
+
+	///@function			node_unfocus()
+	///@description			Release this node's navigation focus (focus returns to the previous group)
+	static node_unfocus = function()
+	{
+		mnd_nav_release_focus(self);
+	}
+
+	///@function			__nav_release_subtree()
+	///@description			Release the navigation focus of every group in this subtree
+	static __nav_release_subtree = function()
+	{
+		if (nav_group != noone) mnd_nav_release_focus(self);
+		
+		var _len = array_length(__nested_nodes);
+		for (var _i = 0; _i < _len; _i++)
+		{
+			__nested_nodes[_i].__nav_release_subtree();
+		}
 	}
 	
-	///@function			node_add_navigation_module()
-	///@description			Enable navigation control for the children nodes
-	static node_add_navigation_module = function()
+	///@function			__nav_mark_dirty()
+	///@description			Mark the navigation group that owns this node's subtree (this node or the nearest ancestor) as dirty
+	static __nav_mark_dirty = function()
 	{
-		navigation = new MiniNodeNavCenter(self);
-		return self;
+		var _current = self;
+		while (_current != noone)
+		{
+			if (_current.nav_group != noone)
+			{
+				_current.nav_group.__dirty = true;
+				return;
+			}
+			_current = _current.parent;
+		}
 	}
+
+	#endregion
 
 	///@function			node_get_children()
 	///@description		Get an array with all nested nodes
@@ -126,27 +206,38 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
 		return _result;
 	}
 	
+	///@function				node_find(_id)
+	///@description				Find a node by id in this node's subtree (depth-first, this node included).
+	///							Ids only need to be unique inside the subtree you search.
+	///@param {String} _id		Node id
+	///@returns {Struct.MiniNode|Constant.noone}
+	static node_find = function(_id)
+	{
+		if (id == _id) return self;
+		
+		var _len = array_length(__nested_nodes);
+		for (var _i = 0; _i < _len; _i++)
+		{
+			var _found = __nested_nodes[_i].node_find(_id);
+			if (_found != noone) return _found;
+		}
+		return noone;
+	}
+	
 	///@function				node_remove(_node)
-	///@description				Remove a nested node by reference
+	///@description				Detach a child node (it is not destroyed and can be added somewhere else).
+	///							Navigation focus held inside the detached subtree is released.
 	///@param {Struct.MiniNode}		_node The node to remove
 	///@returns {Struct.MiniNode}	Self for chaining
 	static node_remove = function(_node)
 	{
 		var _index = _node.__sibling_index;
-		if (_index != undefined && _index < array_length(__nested_nodes))
+		if (_node.parent == self && _index < array_length(__nested_nodes) && __nested_nodes[_index] == _node)
 		{
-			// Remove all node descendants from manager
-			var _descendants = _node.node_get_all_children();
-			var _desc_count = array_length(_descendants);
-			for (var _d = 0; _d < _desc_count; _d++)
-			{
-				var _child = _descendants[_d];
-				mnd_remove_node(_child.id);
-			}
-
-			// Remove the node itself from nested array and manager
+			_node.__nav_release_subtree();
+			
 			array_delete(__nested_nodes, _index, 1);
-			mnd_remove_node(_node.id);
+			_node.parent = noone;
 
 			// Update sibling indices for nodes after the removed one
 			var _len = array_length(__nested_nodes);
@@ -154,6 +245,8 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
 			{
 				__nested_nodes[_i].__sibling_index = _i;
 			}
+
+			__nav_mark_dirty();
 		}
 		return self;
 	}
@@ -199,7 +292,8 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
 			width = _width;
 			height = _height;
 		}
-		fixed_transform = variable_clone(local_transform);
+		fixed_transform.copy_from(local_transform);
+		__mark_transform_dirty();
 	}	
     
     	///@function				node_set_transform(_x, _y, _xscale, _yscale, _alpha, _angle, _width, _height, _depth)
@@ -209,7 +303,8 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
 	static node_set_transform_attribute = function(_attribute, _value)
 	{
 		local_transform[$ _attribute] = _value;
-		fixed_transform[$ _attribute] = variable_clone(local_transform[$ _attribute]);
+		fixed_transform[$ _attribute] = _value;
+		__mark_transform_dirty();
 	}	
 	
 	#endregion
@@ -224,6 +319,19 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
 		if (__transform_dirty) return;
             
 		__transform_dirty = true;			
+	}
+	
+	///@function			__resolve_transform_tree()
+	///@description			Resolve dirty transforms of this node and its whole subtree (top-down)
+	static __resolve_transform_tree = function()
+	{
+		__resolve_transform();
+		
+		var _len = array_length(__nested_nodes);
+		for (var _i = 0; _i < _len; _i++)
+		{
+			__nested_nodes[_i].__resolve_transform_tree();
+		}
 	}
 	
 	///@function			__resolve_transform()
@@ -285,7 +393,7 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
 		}
 		else 
 		{
-			transform = local_transform;	
+			transform.copy_from(local_transform);
 		}
 		
 		// Recalculate node width and height
@@ -535,7 +643,8 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
 			__nested_nodes[_i].enable();
 		}
 							
-        on_enabled.invoke();
+		// Uninitialized nodes get on_enabled from the init phases instead
+        if (processor.is_initialized) on_enabled.invoke();
     }
     
 	///@function					disable(_delay)
@@ -545,6 +654,9 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
 	///@param {Real} [_delay]		Delay in seconds before actually disabling (default 0)
     static disable = function(_delay = 0)
     {
+		// Stop receiving input immediately (also during exit animations)
+		if (nav_group != noone) mnd_nav_release_focus(self);
+
 		if (_delay > 0)
 		{
 			on_disabling.invoke();
@@ -580,6 +692,8 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
 	///						Sets enabled=false and invokes on_disabled, then propagates.
 	static __force_disable = function()
 	{
+		if (nav_group != noone) mnd_nav_release_focus(self);
+
 		enabled = false;
 		on_disabled.invoke();
 		var _len = array_length(__nested_nodes);
@@ -598,12 +712,55 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
 		for (var _i = 0; _i < _len; _i++)
 		{
 			var _child = __nested_nodes[_i];
+			if (_child.nav_group != noone) mnd_nav_release_focus(_child);
 			_child.on_disabling.invoke();
 			_child.__propagate_disabling();
 		}
 	}
 
     
+	#endregion
+	
+	#region DESTROY
+	
+	///@function			node_destroy()
+	///@description			Destroy this node and its subtree: fires on_destroy, cancels pending timers,
+	///						releases navigation focus, removes it from its parent, the root list, the registry and the screen stack.
+	static node_destroy = function()
+	{
+		if (__destroyed) return;
+		__destroyed = true;
+		
+		on_destroy.invoke();
+		
+		// Children first (copy: destroying detaches from __nested_nodes)
+		var _children = [];
+		array_copy(_children, 0, __nested_nodes, 0, array_length(__nested_nodes));
+		var _len = array_length(_children);
+		for (var _i = 0; _i < _len; _i++)
+		{
+			_children[_i].node_destroy();
+		}
+		
+		if (__disable_timer != undefined)
+		{
+			call_cancel(__disable_timer);
+			__disable_timer = undefined;
+		}
+		
+		if (parent != noone) parent.node_remove(self);
+		
+		__mnd_forget_node(self);
+		enabled = false;
+	}
+	
+	///@function			is_destroyed()
+	///@returns {Bool}
+	static is_destroyed = function()
+	{
+		return __destroyed;
+	}
+	
 	#endregion
 	
 	#region SYSTEM
@@ -633,13 +790,17 @@ function MiniNode(_id, _origin = NODE_ORIGIN.MIDDLE_CENTER) constructor
 	}
     
 	///@function			__node_init()
-	///@description			Internal initialization handler. Clears init block and marks transform dirty.
+	///@description			Internal initialization handler. Marks transform dirty so the init resolve phase calculates it.
 	///						Connected to processor.on_init event.
 	static __node_init = function()
 	{
-		__node_init_block = false;	
 		__mark_transform_dirty();
 	}
+	
+	///@function			__layout()
+	///@description			Layout hook called bottom-up during initialization (children before parents),
+	///						after on_init and before on_ready. Override in layout nodes (e.g. MiniNodeContainer).
+	static __layout = function() {}
     
 	// Connecting system events
 	on_node_updated.connect(self, __node_system_update);
@@ -672,6 +833,27 @@ function NodeTransform(_owner) constructor
 	offset_y = 0;
 	
 	depth = 0;
+	
+	///@function					copy_from(_other)
+	///@description					Copy every value from another transform in place (owner is kept).
+	///								Never use variable_clone on transforms: `owner` would deep-copy the whole node graph.
+	///@param {Struct.NodeTransform} _other
+	///@returns {Struct.NodeTransform}	Self
+	static copy_from = function(_other)
+	{
+		x = _other.x;
+		y = _other.y;
+		image_xscale = _other.image_xscale;
+		image_yscale = _other.image_yscale;
+		image_angle = _other.image_angle;
+		image_alpha = _other.image_alpha;
+		width = _other.width;
+		height = _other.height;
+		offset_x = _other.offset_x;
+		offset_y = _other.offset_y;
+		depth = _other.depth;
+		return self;
+	}
 }	
 
 #endregion

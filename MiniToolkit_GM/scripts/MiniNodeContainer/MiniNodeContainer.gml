@@ -55,8 +55,6 @@ function MiniNodeContainer(_name, _columns = 0, _origin = MND_CONTAINER_DEFAULT_
 	__layout_height = 0;
 	__row_heights = [];
 	__col_widths = [];
-	
-	__organized_once = false;
 
 	#region CONFIGURATION
 	
@@ -143,37 +141,47 @@ function MiniNodeContainer(_name, _columns = 0, _origin = MND_CONTAINER_DEFAULT_
 	///@returns {Struct.MiniNodeContainer} Self for chaining
 	static container_layout = function()
 	{
-		__container_organize();
+		__container_organize(true);
 		return self;
 	}
 	
-	///@function				__container_organize()
+	///@function				__layout()
+	///@description				Init layout phase (bottom-up): nested containers were already organized
+	static __layout = function()
+	{
+		__container_organize(false);
+	}
+	
+	///@function				__container_organize(_recursive)
 	///@description				Calculate and apply layout positions for all children
-	static __container_organize = function()
+	///@param {Bool} [_recursive]	Organize nested containers first (default true)
+	static __container_organize = function(_recursive = true)
 	{
 		var _children = __nested_nodes;
 		var _count = array_length(_children);
 		
 		if (_count == 0) return;
 
-		for (var _i = 0; _i < _count; _i++)
+		if (_recursive)
 		{
-			if (is_instanceof(_children[_i], MiniNodeContainer))
+			for (var _i = 0; _i < _count; _i++)
 			{
-				_children[_i].__container_organize();
+				if (is_instanceof(_children[_i], MiniNodeContainer))
+				{
+					_children[_i].__container_organize(true);
+				}
 			}
 		}
-		__organized_once = true;
 	
-		// Scale spacing
-		var _spacing_x = __base_spacing.x * abs(transform.image_xscale);
-		var _spacing_y = __base_spacing.y * abs(transform.image_yscale);
+		// Layout is calculated in LOCAL (unscaled) space: children positions are local and the
+		// container's world scale is applied by __transform_update. Using world scale here would scale twice.
+		var _spacing_x = __base_spacing.x;
+		var _spacing_y = __base_spacing.y;
 		spacing.x = _spacing_x;
 		spacing.y = _spacing_y;
 		
-		// Scale padding
-		var _padding_x = padding.x * abs(transform.image_xscale);
-		var _padding_y = padding.y * abs(transform.image_yscale);
+		var _padding_x = padding.x;
+		var _padding_y = padding.y;
 		
 		// Calculate grid dimensions
 		var _cols = columns <= 0 ? _count : columns;
@@ -199,8 +207,9 @@ function MiniNodeContainer(_name, _columns = 0, _origin = MND_CONTAINER_DEFAULT_
 				_col = _i div _rows;
 			}
 			
-			var _w = _node.fixed_transform.width * abs(_node.transform.image_xscale);
-			var _h = _node.fixed_transform.height * abs(_node.transform.image_yscale);
+			// Child size in this container's space (child's own local scale only)
+			var _w = _node.fixed_transform.width * abs(_node.local_transform.image_xscale);
+			var _h = _node.fixed_transform.height * abs(_node.local_transform.image_yscale);
 			
 			__col_widths[_col] = max(__col_widths[_col], _w);
 			__row_heights[_row] = max(__row_heights[_row], _h);
@@ -219,32 +228,31 @@ function MiniNodeContainer(_name, _columns = 0, _origin = MND_CONTAINER_DEFAULT_
 		// Update container size
 		if (auto_size)
 		{
-			var _total_w = __layout_width + _padding_x * 2;
-			var _total_h = __layout_height + _padding_y * 2;
-			
-			var _abs_sx = abs(transform.image_xscale);
-			var _abs_sy = abs(transform.image_yscale);
-			
-			fixed_transform.width = _abs_sx != 0 ? _total_w / _abs_sx : _total_w;
-			fixed_transform.height = _abs_sy != 0 ? _total_h / _abs_sy : _total_h;
-			transform.width = _total_w;
-			transform.height = _total_h;
+			fixed_transform.width = __layout_width + _padding_x * 2;
+			fixed_transform.height = __layout_height + _padding_y * 2;
 		}
 		
-		// Recalculate origin offset after size is set
+		// Keep world size/origin offset in sync now (resolve also recalculates them)
+		transform.width = fixed_transform.width * abs(transform.image_xscale);
+		transform.height = fixed_transform.height * abs(transform.image_yscale);
 		__transform_set_system_origin_offset();
+		__mark_transform_dirty();
 		
 		// Position children
 		__position_children(_children, _count, _cols, _rows, _spacing_x, _spacing_y, _padding_x, _padding_y);
+
+		// Layout changed - cached navigation links must be rebuilt
+		__nav_mark_dirty();
 	}
 	
 	///@function				__position_children(...)
 	///@description				Position all children based on calculated cell sizes, flow, alignment
 	static __position_children = function(_children, _count, _cols, _rows, _spacing_x, _spacing_y, _padding_x, _padding_y)
 	{
-		// Container's TOP_LEFT position
-		var _base_x = sys_origin_offset[0] + _padding_x;
-		var _base_y = sys_origin_offset[1] + _padding_y;
+		// Container's TOP_LEFT corner in local space, relative to its origin point
+		var _origin_factor = NODE_ORIGIN_CONVERSION[origin];
+		var _base_x = fixed_transform.width * _origin_factor[0] + _padding_x;
+		var _base_y = fixed_transform.height * _origin_factor[1] + _padding_y;
 		
 		// Adjust starting position based on flow direction
 		var _start_x = (h_flow == NODE_HFLOW.LEFT) ? _base_x + __layout_width : _base_x;
@@ -279,8 +287,8 @@ function MiniNodeContainer(_name, _columns = 0, _origin = MND_CONTAINER_DEFAULT_
 					: _start_y - _cumulative_y - _row_h;
 				
 				// Get child dimensions
-				var _node_w = _node.fixed_transform.width * abs(_node.transform.image_xscale);
-				var _node_h = _node.fixed_transform.height * abs(_node.transform.image_yscale);
+				var _node_w = _node.fixed_transform.width * abs(_node.local_transform.image_xscale);
+				var _node_h = _node.fixed_transform.height * abs(_node.local_transform.image_yscale);
 				
 				// Determine the origin used for cell alignment
 				var _cell_origin = (__children_origin_override != noone) ? __children_origin_override : _node.origin;
@@ -306,17 +314,7 @@ function MiniNodeContainer(_name, _columns = 0, _origin = MND_CONTAINER_DEFAULT_
 	}
 	
 	#endregion
-	
-	#region INITIALIZATION
-	
-	// Organize children on init and on update
-	processor.on_init.connect(self, function()
-	{
-		if (!__organized_once) __container_organize();
-	}, false, 100);
-	
-	
-	#endregion
+
 }
 
 #endregion

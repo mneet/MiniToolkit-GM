@@ -1,403 +1,328 @@
 ///@description		NodeManager - Central hub for the MiniNode UI system.
-///					All state is stored on obj_node_manager instance variables. Functions use the mnd_ prefix.
+///					State lives on the obj_node_manager singleton (created on demand by __mnd()).
+///					Public functions use the mnd_ prefix with sub-namespaces:
+///						mnd_root_*    root nodes (processed and drawn by the manager)
+///						mnd_node_*    global lookup registry and node helpers
+///						mnd_input_*   input mode, blocking and consumption   (NodeManagerInput)
+///						mnd_nav_*     navigation focus stack                  (NodeManagerFocus)
+///						mnd_show/hide, mnd_transition, mnd_screen_*            (NodeManagerScreens)
+///					Every public function accepts a node reference or a node id, and returns noone when nothing is found.
 
-#region Input Mode
+#region Core
 
-function mnd_get_input_mode()      { return obj_node_manager.input_mode; }
-function mnd_set_input_mode(_mode) { obj_node_manager.input_mode = _mode; }
-
-function mnd_is_cursor_mode()    { return obj_node_manager.input_mode == MND_NAV_INPUT.CURSOR; }
-function mnd_is_button_mode()    { return obj_node_manager.input_mode == MND_NAV_INPUT.BUTTON; }
-function mnd_is_input_consumed() { return obj_node_manager.__input_consumed; }
-function mnd_consume_input()     { obj_node_manager.__input_consumed = true; }
-
-#endregion
-
-#region MiniNode Collection Management
-
-///@function					mnd_create_node(_node, _enabled, _root)
-///@description					Register a node in the collection using a weak reference.
-///								If _root is true, also registers it as a root node (processed & drawn by obj_node_manager).
-///@param {Struct.MiniNode} _node	The node to register
-///@param {Bool} [_enabled]		Whether the node starts enabled (default true)
-///@param {Bool} [_root]		Whether to register as a root node (default false)
-///@returns {Bool}				True if registered, false if ID already exists
-function mnd_create_node(_node, _enabled = true, _root = true)
+///@function		__mnd()
+///@description		Get the manager instance, creating it if needed
+///@returns {Id.Instance}
+function __mnd()
 {
 	if (!instance_exists(obj_node_manager))
 	{
 		instance_create_depth(0, 0, 0, obj_node_manager);
 	}
-	
-	var _m = obj_node_manager;
-	var _collection = _m.__node_collection;
-	
-	if (struct_exists(_collection, _node.id))
+	return obj_node_manager;
+}
+
+///@function						__mnd_resolve_node(_node)
+///@description						Resolve a node reference or id (searched with mnd_node_get) into a node struct
+///@param {Struct.MiniNode|String} _node
+///@returns {Struct.MiniNode|Constant.noone}
+function __mnd_resolve_node(_node)
+{
+	if (is_struct(_node)) return _node;
+	if (is_string(_node)) return mnd_node_get(_node);
+	return noone;
+}
+
+///@function						__mnd_resolve_id(_node)
+///@description						Resolve a node reference or id into a node id
+///@param {Struct.MiniNode|String} _node
+///@returns {String|Constant.noone}
+function __mnd_resolve_id(_node)
+{
+	if (is_string(_node)) return _node;
+	if (is_struct(_node)) return _node.id;
+	return noone;
+}
+
+///@function						__mnd_forget_node(_node)
+///@description						Remove every manager reference to a node (roots, registry, focus, screens). Used by node_destroy().
+function __mnd_forget_node(_node)
+{
+	if (!instance_exists(obj_node_manager)) return;
+
+	mnd_nav_release_focus(_node);
+	mnd_root_remove(_node);
+	mnd_node_unregister(_node);
+	__mnd_screen_forget(_node);
+}
+
+#endregion
+
+#region Roots
+
+///@function								mnd_root_add(_node, _enabled)
+///@description								Register a node as a root: it is processed and drawn by the manager (Draw GUI).
+///											Roots are also registered for global lookup. Calling it on an existing root only applies _enabled = false.
+///											MiniNodeCanvas registers itself automatically (see MND_CANVAS_AUTO_ROOT).
+///@param {Struct.MiniNode} _node			The node (must not have a parent)
+///@param {Bool} [_enabled]					If false, the node starts disabled (default true)
+///@returns {Bool}							True if the node is a root after the call
+function mnd_root_add(_node, _enabled = true)
+{
+	_node = __mnd_resolve_node(_node);
+	if (_node == noone) return false;
+
+	if (_node.parent != noone)
 	{
-		show_debug_message($"[NodeManager] Warning: MiniNode ID '{_node.id}' already exists");
+		show_debug_message($"[NodeManager] mnd_root_add: '{_node.id}' has a parent and cannot be a root");
 		return false;
 	}
-	
-	_collection[$ _node.id] = weak_ref_create(_node);
-	_m.node_count++;
-	
-	// Register as root if flagged
-	if (_root)
+
+	var _m = __mnd();
+	if (!mnd_root_is(_node))
 	{
-		_m.__root_nodes[$ _node.id] = _node;
-		array_push(_m.__root_draw_order, _node.id);
-		_m.root_count++;
+		array_push(_m.__roots, _node);
+		mnd_node_register(_node);
 	}
-	
+
 	if (!_enabled) _node.disable();
-	
 	return true;
 }
 
-///@function					mnd_remove_node(_node_id)
-///@description					Remove a node from the collection.
-///								If the node is also a root, removes it from root tracking too.
-///@param {String} _node_id		The node ID to remove
-///@returns {Bool}				True if removed
-function mnd_remove_node(_node_id)
+///@function								mnd_root_remove(_node)
+///@description								Stop processing/drawing a root (the node is not destroyed)
+///@param {Struct.MiniNode|String} _node
+///@returns {Bool}							True if it was a root
+function mnd_root_remove(_node)
 {
-	var _m = obj_node_manager;
-	var _collection = _m.__node_collection;
-	
-	if (!struct_exists(_collection, _node_id)) return false;
-	
-	// If it's a root, clean up root tracking
-	if (struct_exists(_m.__root_nodes, _node_id))
-	{
-		var _node = _m.__root_nodes[$ _node_id];
-		
-		// Release navigation focus if active
-		if (_node.nav_module != noone && _node.nav_module.has_focus)
-		{
-			_node.nav_module.release_focus();
-		}
-		
-		struct_remove(_m.__root_nodes, _node_id);
-		
-		var _idx = array_get_index(_m.__root_draw_order, _node_id);
-		if (_idx >= 0) array_delete(_m.__root_draw_order, _idx, 1);
-		
-		_m.root_count = max(0, _m.root_count - 1);
-	}
-	
-	struct_remove(_collection, _node_id);
-	_m.node_count = max(0, _m.node_count - 1);
+	if (!instance_exists(obj_node_manager)) return false;
+	_node = __mnd_resolve_node(_node);
+	if (_node == noone) return false;
+
+	var _roots = obj_node_manager.__roots;
+	var _idx = array_get_index(_roots, _node);
+	if (_idx < 0) return false;
+
+	_node.__nav_release_subtree();
+	array_delete(_roots, _idx, 1);
 	return true;
 }
 
-///@function					mnd_get_node(_node_id)
-///@description					Get a node by its ID from the collection
-///@param {String} _node_id		The node ID to find
-///@returns {Struct.MiniNode|Undefined}
-function mnd_get_node(_node_id)
+///@function								mnd_root_is(_node)
+///@param {Struct.MiniNode|String} _node
+///@returns {Bool}
+function mnd_root_is(_node)
 {
-	var _collection = obj_node_manager.__node_collection;
-	
-	if (struct_exists(_collection, _node_id))
+	if (!instance_exists(obj_node_manager)) return false;
+	_node = __mnd_resolve_node(_node);
+	return _node != noone && array_get_index(obj_node_manager.__roots, _node) >= 0;
+}
+
+///@function			mnd_root_get_all()
+///@description			Get the roots in draw order (back to front). Do not modify the array.
+///@returns {Array<Struct.MiniNode>}
+function mnd_root_get_all()
+{
+	return __mnd().__roots;
+}
+
+///@function								mnd_root_set_order(_node, _index)
+///@description								Change a root's position in the draw/process order
+///@param {Struct.MiniNode|String} _node
+///@param {Real} _index						New index (0 = back, -1 = front)
+function mnd_root_set_order(_node, _index)
+{
+	_node = __mnd_resolve_node(_node);
+	var _roots = __mnd().__roots;
+	var _idx = array_get_index(_roots, _node);
+	if (_idx < 0) return;
+
+	array_delete(_roots, _idx, 1);
+
+	if (_index < 0 || _index >= array_length(_roots)) array_push(_roots, _node);
+	else array_insert(_roots, _index, _node);
+}
+
+function mnd_root_bring_to_front(_node) { mnd_root_set_order(_node, -1); }
+function mnd_root_send_to_back(_node)   { mnd_root_set_order(_node, 0); }
+
+#endregion
+
+#region Registry & Nodes
+
+///@function								mnd_node_register(_node)
+///@description								Register a node for fast global lookup with mnd_node_get (roots are registered automatically).
+///											Ids only need to be globally unique for registered nodes; use node.node_find() for local lookups.
+///@param {Struct.MiniNode} _node
+///@returns {Bool}							False if another living node already uses the id
+function mnd_node_register(_node)
+{
+	var _registry = __mnd().__registry;
+	var _id = _node.id;
+
+	if (struct_exists(_registry, _id))
 	{
-		var _weak_ref = _collection[$ _node_id];
-		
-		if (weak_ref_alive(_weak_ref))
+		var _ref = _registry[$ _id];
+		if (weak_ref_alive(_ref) && _ref.ref != _node && !_ref.ref.__destroyed)
 		{
-			return _weak_ref.ref;
-		}
-		else
-		{
-			struct_remove(_collection, _node_id);
+			show_debug_message($"[NodeManager] mnd_node_register: id '{_id}' is already registered by another node");
+			return false;
 		}
 	}
-	return undefined;
+
+	_registry[$ _id] = weak_ref_create(_node);
+	return true;
 }
 
-///@function								mnd_enable_node(_node)
-///@description								Enable a node by its reference or ID
-///@param {Struct.MiniNode|String} _node	The node or node ID
-function mnd_enable_node(_node, _grab_focus = false)
+///@function								mnd_node_unregister(_node)
+///@param {Struct.MiniNode|String} _node
+function mnd_node_unregister(_node)
 {
-	if (is_string(_node)) _node = mnd_get_node(_node);
-	
-	if (_node != undefined)
+	if (!instance_exists(obj_node_manager)) return;
+
+	var _registry = obj_node_manager.__registry;
+	var _id = __mnd_resolve_id(_node);
+	if (!struct_exists(_registry, _id)) return;
+
+	// Only remove if it points to this node (or a dead one)
+	var _ref = _registry[$ _id];
+	if (!is_struct(_node) || !weak_ref_alive(_ref) || _ref.ref == _node)
 	{
-		if (_grab_focus) _node.on_enabled.connect(_node, function () {
-			call_later(1, time_source_units_frames, method(self, function() {
-				mnd_nav_set_focus(self.id);
-			}));
-		}, true);
-		_node.enable();
+		struct_remove(_registry, _id);
 	}
 }
 
-///@function							mnd_disable_node(_node, _delay)
-///@description							Disable a node by its reference or ID
-///@param {Struct.MiniNode|String} _node	The node or node ID
-///@param {Real} [_delay]				Delay in seconds (default 0)
-function mnd_disable_node(_node, _delay = 0)
+///@function								mnd_node_get(_id)
+///@description								Find a node by id: registered nodes first, then a search through every root subtree
+///@param {String} _id
+///@returns {Struct.MiniNode|Constant.noone}
+function mnd_node_get(_id)
 {
-	if (is_string(_node)) _node = mnd_get_node(_node);
-	if (_node != undefined) _node.disable(_delay);
-}
-
-function mnd_node_exists(_node_id) { return mnd_get_node(_node_id) != undefined; }
-
-///@function			mnd_cleanup_dead_refs()
-///@description			Remove all dead weak references from the collection
-///@returns {Real}		Number of dead references removed
-function mnd_cleanup_dead_refs()
-{
+	if (!instance_exists(obj_node_manager)) return noone;
 	var _m = obj_node_manager;
-	var _collection = _m.__node_collection;
-	var _keys = struct_get_names(_collection);
-	var _removed = 0;
-	
-	for (var _i = array_length(_keys) - 1; _i >= 0; _i--)
+
+	// Registry
+	if (struct_exists(_m.__registry, _id))
 	{
-		var _key = _keys[_i];
-		if (!weak_ref_alive(_collection[$ _key]))
-		{
-			struct_remove(_collection, _key);
-			_removed++;
-		}
+		var _ref = _m.__registry[$ _id];
+		if (weak_ref_alive(_ref) && !_ref.ref.__destroyed) return _ref.ref;
+		struct_remove(_m.__registry, _id);
 	}
-	
-	_m.node_count = max(0, _m.node_count - _removed);
-	return _removed;
+
+	// Search roots
+	var _roots = _m.__roots;
+	var _len = array_length(_roots);
+	for (var _i = 0; _i < _len; _i++)
+	{
+		var _found = _roots[_i].node_find(_id);
+		if (_found != noone) return _found;
+	}
+	return noone;
 }
 
+///@function								mnd_node_exists(_id)
+///@returns {Bool}
+function mnd_node_exists(_id)
+{
+	return mnd_node_get(_id) != noone;
+}
+
+///@function								mnd_node_enable(_node)
+///@description								Enable a node (see mnd_show to also give it navigation focus)
+///@param {Struct.MiniNode|String} _node
+function mnd_node_enable(_node)
+{
+	_node = __mnd_resolve_node(_node);
+	if (_node != noone) _node.enable();
+}
+
+///@function								mnd_node_disable(_node, _delay)
+///@param {Struct.MiniNode|String} _node
+///@param {Real} [_delay]					Delay in seconds (on_disabling fires immediately)
+function mnd_node_disable(_node, _delay = 0)
+{
+	_node = __mnd_resolve_node(_node);
+	if (_node != noone) _node.disable(_delay);
+}
+
+///@function								mnd_node_destroy(_node)
+///@description								Destroy a node and its subtree (see MiniNode.node_destroy)
+///@param {Struct.MiniNode|String} _node
+function mnd_node_destroy(_node)
+{
+	_node = __mnd_resolve_node(_node);
+	if (_node != noone) _node.node_destroy();
+}
+
+///@function			mnd_destroy_all()
+///@description			Destroy every root and reset the manager state (focus, screens, input blocks and mode)
 function mnd_destroy_all()
 {
-	if (instance_exists(obj_node_manager)) obj_node_manager.reset_all();
-}
+	if (!instance_exists(obj_node_manager)) return;
+	var _m = obj_node_manager;
 
-#endregion
-
-#region Root MiniNode Management
-
-///@function				mnd_set_root_draw_order(_id, _index)
-///@description				Change a root node's position in the draw order
-///@param {String} _id		The root node ID
-///@param {Real} _index		New index (0 = back, -1 = front)
-function mnd_set_root_draw_order(_id, _index)
-{
-	var _order = obj_node_manager.__root_draw_order;
-	var _current_idx = array_get_index(_order, _id);
-	if (_current_idx < 0) return;
-	
-	array_delete(_order, _current_idx, 1);
-	
-	if (_index < 0 || _index >= array_length(_order))
-		array_push(_order, _id);
-	else
-		array_insert(_order, _index, _id);
-}
-
-function mnd_bring_root_to_front(_id) { mnd_set_root_draw_order(_id, -1); }
-function mnd_send_root_to_back(_id)   { mnd_set_root_draw_order(_id, 0); }
-function mnd_get_all_roots()          { return obj_node_manager.__root_draw_order; }
-
-#endregion
-
-#region Navigation Focus Management (Depth-based Stack)
-
-function mnd_nav_set_focus(_node)
-{
-	if (is_string(_node)) _node = mnd_get_node(_node);
-	
-	if (_node.nav_module == noone) return;
-
-	var _current_module = mnd_nav_get_focused_module();
-	if (_current_module != undefined)
+	var _roots = [];
+	array_copy(_roots, 0, _m.__roots, 0, array_length(_m.__roots));
+	var _len = array_length(_roots);
+	for (var _i = 0; _i < _len; _i++)
 	{
-		obj_node_manager.prev_focused_node_id = obj_node_manager.focused_node_id;
-		_current_module.release_focus();	
+		_roots[_i].node_destroy();
 	}
-	
-	obj_node_manager.focused_node_id = _node.id;
-	_node.nav_module.gain_focus();
-}
 
-///@function								mnd_nav_pop_focus()
-///@description								Remove focus from the current module and set the previous one as focused.
-function mnd_nav_pop_focus()
-{
-	var _current_module = mnd_nav_get_focused_module();
-	if (_current_module != undefined)
-	{
-		_current_module.release_focus();
-	}
-	
-	if (obj_node_manager.prev_focused_node_id != noone)
-	{
-		mnd_nav_set_focus(obj_node_manager.prev_focused_node_id);	
-	}
-	
-}
-
-///@function		mnd_nav_get_focused_module()
-///@description		Get the currently focused navigation module
-///@returns {Struct.MiniNodeNavCenter|Undefined}
-function mnd_nav_get_focused_module()
-{
-	var _node = mnd_get_node(obj_node_manager.focused_node_id);
-	
-	if (_node == noone || _node == undefined) return undefined;
-	
-	return _node.nav_module;
-}
-
-///@function									mnd_nav_has_focus(_module)
-///@description									Check if a specific module currently has input focus
-///@param {Struct.MiniNodeNavCenter} _module
-///@returns {Bool}
-function mnd_nav_has_focus(_node)
-{
-	return obj_node_manager.focused_node_id == _node.id;
-}
-
-///@function		mnd_nav_clear_focus()
-///@description		Clear all module focus from the stack
-function mnd_nav_clear_focus()
-{
-	var _current_module = mnd_get_focused_module();
-	if (_current_module != undefined)
-	{
-		_current_module.release_focus();
-	}
-	obj_node_manager.focused_node_id = noone;
-	obj_node_manager.prev_focused_node_id = noone;
+	_m.__reset_state();
 }
 
 #endregion
 
-#region Selected MiniNode Tracking
+#region Debug
 
-///@function		mnd_get_selected_node()
-///@description		Get the currently selected node
-///@returns {Struct.MiniNode|Undefined}
-function mnd_get_selected_node()
+global.__mnd_debug = {
+	draw_size: MND_DEBUG_SIZE,
+	draw_origin: MND_DEBUG_ORIGIN
+};
+
+///@function				mnd_debug_set(_draw_size, _draw_origin)
+///@description				Toggle debug drawing at runtime (bounding boxes and origins of every drawn node)
+///@param {Bool} _draw_size
+///@param {Bool} [_draw_origin]
+function mnd_debug_set(_draw_size, _draw_origin = _draw_size)
 {
-	var _module = mnd_nav_get_focused_module();
-	if (_module == undefined) return undefined;
-	
-	return _module.nav_node_selected;
+	global.__mnd_debug.draw_size = _draw_size;
+	global.__mnd_debug.draw_origin = _draw_origin;
 }
 
-#endregion
-
-#region Input Blocking
-
-function mnd_block_button_navigation(_block)
+///@function								mnd_debug_print_tree(_node)
+///@description								Print a node hierarchy to the output (all roots when omitted)
+///@param {Struct.MiniNode|String} [_node]
+function mnd_debug_print_tree(_node = undefined)
 {
-	var _m = obj_node_manager;
-	_m.block_button_navigation = _block;
-}
-
-function mnd_block_cursor_navigation(_block)
-{
-	var _m = obj_node_manager;
-	_m.block_cursor_navigation = _block;
-}
-
-function mnd_block_button_action(_block)
-{
-	var _m = obj_node_manager;
-	_m.block_button_action = _block;
-}
-
-function mnd_block_cursor_action(_block)
-{
-	var _m = obj_node_manager;
-	_m.block_cursor_action = _block
-}
-
-function mnd_block_all_navigation(_block)
-{
-	mnd_block_button_navigation(_block);
-	mnd_block_cursor_navigation(_block);
-}
-
-function mnd_block_all_actions(_block)
-{
-	mnd_block_button_action(_block);
-	mnd_block_cursor_action(_block);
-}
-
-function mnd_block_all_input(_block)
-{
-	mnd_block_all_navigation(_block);
-	mnd_block_all_actions(_block);
-}
-
-function mnd_is_button_navigation_blocked() { return obj_node_manager.block_button_navigation; }
-function mnd_is_cursor_navigation_blocked() { return obj_node_manager.block_cursor_navigation; }
-function mnd_is_button_action_blocked()     { return obj_node_manager.block_button_action; }
-function mnd_is_cursor_action_blocked()     { return obj_node_manager.block_cursor_action; }
-
-function mnd_is_action_blocked()
-{
-	var _m = obj_node_manager;
-	var _cursor = _m.input_mode == MND_NAV_INPUT.CURSOR && _m.block_cursor_action;
-	var _button = _m.input_mode == MND_NAV_INPUT.BUTTON && _m.block_button_action;
-	return _cursor || _button;
-}
-
-function mnd_is_navigation_blocked()
-{
-	var _m = obj_node_manager;
-	var _cursor = _m.input_mode == MND_NAV_INPUT.CURSOR && _m.block_cursor_navigation;
-	var _button = _m.input_mode == MND_NAV_INPUT.BUTTON && _m.block_button_navigation;
-	return _cursor || _button;
-}
-
-#endregion
-
-#region Transition Management
-
-///@function								mnd_transition(_from_node, _to_node, _delay)
-///@description								Transition between nodes. Disables the first and enables the second.
-///											If the target has a NavigationModule, gives it focus.
-///@param {Struct.MiniNode|String} _from_node	The node to disable
-///@param {Struct.MiniNode|String} _to_node		The node to enable after transition
-///@param {Real} [_delay]					Delay in seconds (default 0)
-function mnd_transition(_from_node, _to_node, _delay = 0)
-{
-	if (is_string(_from_node)) _from_node = mnd_get_node(_from_node);
-	if (is_string(_to_node))   _to_node   = mnd_get_node(_to_node);
-	
-	if (_from_node == undefined)
+	if (_node == undefined)
 	{
-		show_debug_message("[NodeManager] Transition error: from_node not found");
+		var _roots = mnd_root_get_all();
+		show_debug_message($"[NodeManager] {array_length(_roots)} root(s)");
+		for (var _i = 0; _i < array_length(_roots); _i++) __mnd_debug_print_node(_roots[_i], 0);
 		return;
 	}
-	if (_to_node == undefined)
-	{
-		show_debug_message("[NodeManager] Transition error: to_node not found");
-		return;
-	}
-	
-	mnd_block_all_input(true);
-	
-	var _method = method(_to_node, function ()
-	{
-		call_later(1, time_source_units_frames,
-		function()
-		{
-			enable();
-			// If target has a navigation module, give it focus
-			if (navigation != noone)
-			{
-				mnd_nav_set_focus(self);
-			}
-			mnd_block_all_input(false);
-		});
-	});
-	
-	_from_node.on_disabled.connect(_to_node, _method, true);
-	_from_node.disable(_delay);
+
+	_node = __mnd_resolve_node(_node);
+	if (_node != noone) __mnd_debug_print_node(_node, 0);
+}
+
+///@function	__mnd_debug_print_node(_node, _depth)
+function __mnd_debug_print_node(_node, _depth)
+{
+	var _flags = "";
+	if (!_node.enabled)					_flags += " [disabled]";
+	if (!_node.visible)					_flags += " [hidden]";
+	if (!_node.is_initialized())		_flags += " [uninit]";
+	if (_node.nav_group != noone)		_flags += mnd_nav_has_focus(_node) ? " [group:FOCUS]" : " [group]";
+	if (_node.nav_item != noone)		_flags += _node.nav_item.is_selected ? " [item:SELECTED]" : " [item]";
+
+	var _t = _node.transform;
+	show_debug_message($"{string_repeat("  ", _depth)}- {_node.id} ({instanceof(_node)}) pos({_t.x}, {_t.y}) size({_t.width}x{_t.height}){_flags}");
+
+	var _children = _node.__nested_nodes;
+	for (var _i = 0; _i < array_length(_children); _i++) __mnd_debug_print_node(_children[_i], _depth + 1);
 }
 
 #endregion

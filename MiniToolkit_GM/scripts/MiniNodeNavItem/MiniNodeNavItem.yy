@@ -1,9 +1,9 @@
 {
   "$GMScript":"v1",
-  "%Name":"MiniNodeNavigator",
+  "%Name":"MiniNodeNavItem",
   "isCompatibility":false,
   "isDnD":false,
-  "name":"MiniNodeNavigator",
+  "name":"MiniNodeNavItem",
   "parent":{
     "name":"Components",
     "path":"folders/MiniToolkit/MiniNode/NodeStructs/Components.yy",

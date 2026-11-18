@@ -6,7 +6,7 @@ A collection of simple systems developed to streamline GameMaker projects.
 
 ### 🧩 MiniNodes
 
-A code-driven interface builder for creating quick and functional GUIs. Includes components like containers, canvases, and navigators for building user interfaces programmatically without using the Room Editor.
+A code-driven interface builder for creating quick and functional GUIs. Includes components like containers, canvases, and focus-based navigation groups (automatic or manual) for building user interfaces programmatically without using the Room Editor.
 
 ### ✨ MiniTweens
 
@@ -59,19 +59,22 @@ evt_level_up.invoke(5);
 
 ```gml
 // Create a UI Canvas attached to the top-left
-main_canvas = new NodeCanvas("my_canvas", NODE_ORIGIN.TOP_LEFT);
+main_canvas = new MiniNodeCanvas("my_canvas", NODE_ORIGIN.TOP_LEFT);
 
 with (main_canvas)
 {
-    // Create a button
-    var _button = new NodeButton("play_button");
+    // Any node can control navigation for the items below it
+    node_add_nav_group().nav_set_wrap(false, true);
+
+    // Create a button (buttons are navigation items)
+    var _button = new MiniNodeButton("play_button");
     
     with (_button)
     {
         button_set_text("START GAME", fnt_arial_12);
         
         // Connect button event
-        on_button_pressed.connect(other.id, function() {
+        on_button_released.connect(other.id, function() {
             room_goto(rm_game);
         });
     }
@@ -80,6 +83,12 @@ with (main_canvas)
     node_add(_button);
 }
 
+// Canvases register themselves as root nodes (processed and drawn by the manager).
+// Menu flow with the screen stack:
+mnd_screen_push(main_canvas);              // base screen
+mnd_screen_push("options_canvas");         // hides the main canvas, shows options
+mnd_screen_push("confirm_popup", false);   // popup over the current screen (steals focus)
+mnd_screen_pop();                          // back to the previous screen
 ```
 
 ---

@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"NodeManagerScreens",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"NodeManagerScreens",
+  "parent":{
+    "name":"InternalSystems",
+    "path":"folders/MiniToolkit/MiniNode/InternalSystems.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

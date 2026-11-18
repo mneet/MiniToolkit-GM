@@ -3,7 +3,7 @@
     A basic event system based on the Observer Pattern
  
     Authors: M. Neet - https://github.com/mneet/MiniToolkit-GM
-    Version: 1.0.0
+    Version: 1.0.1
 */
 
 global.__mini_event_broadcasts = {};

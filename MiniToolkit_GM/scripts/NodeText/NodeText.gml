@@ -7,8 +7,9 @@
 ///@param {Enum.NODE_ORIGIN} [_origin]	Anchor point for positioning
 function MiniNodeText(_name, _text, _font, _color, _origin = NODE_ORIGIN.MIDDLE_CENTER) : MiniNode(_name, _origin) constructor 
 {
-	text =  _text;
+	text = _text;				// Raw text (never modified by wrapping)
 	font = _font;
+	__display_text = _text;		// Text actually drawn (wrapped), calculated by __calculate_text_size
 	
 	// Text Attributes
 	txt_color1 = _color;
@@ -30,19 +31,18 @@ function MiniNodeText(_name, _text, _font, _color, _origin = NODE_ORIGIN.MIDDLE_
 	
 	#region System Methods
 	
-	///@description Calculate the text size based on font and text content
+	///@description Calculate the displayed text (wrap) and fit scale from the raw text.
+	///				Runs on init and whenever text/wrap change after init.
 	static __calculate_text_size = function()
 	{
 		draw_set_font(font);
 		
-		if (h_wrap > 0)
-		{
-			text = node_string_wrap(text, h_wrap);	
-		}
+		__display_text = (h_wrap > 0) ? node_string_wrap(text, h_wrap) : text;
 
 		if (__fit_to_width)
 		{
-			var _txt_width = string_width(text);
+			text_xscale = 1;
+			var _txt_width = string_width(__display_text);
 			if (_txt_width > fixed_transform.width)
 			{ 
 				text_xscale = round((fixed_transform.width / _txt_width) * 10) / 10;
@@ -66,7 +66,7 @@ function MiniNodeText(_name, _text, _font, _color, _origin = NODE_ORIGIN.MIDDLE_
 		draw_text_ext_transformed_color(
 			_transform.x, 
 			_transform.y, 
-			_node.text, 
+			_node.__display_text, 
 			_node.separation, 
 			-1, 
 			_node.text_xscale * _transform.image_xscale, 
@@ -97,6 +97,7 @@ function MiniNodeText(_name, _text, _font, _color, _origin = NODE_ORIGIN.MIDDLE_
 	static text_set = function(_text)
 	{
 		text = _text;
+		if (processor.is_initialized) __calculate_text_size();
 		return self;
 	}
 
@@ -185,6 +186,7 @@ function MiniNodeText(_name, _text, _font, _color, _origin = NODE_ORIGIN.MIDDLE_
 	static text_set_wrap = function(_wrap_width)
 	{
 		h_wrap = _wrap_width;
+		if (processor.is_initialized) __calculate_text_size();
 		return self;
 	}
 	

@@ -6,10 +6,17 @@ function MiniNodeProcessor(_owner = noone) constructor
 	
 	#region Lifecycle
 	
-	on_init = new MiniEvent();			// First initialization
-	on_post_init = new MiniEvent();		// After initialization is completed
-	
-	is_initialized = false;				// Init has run
+	// Initialization runs in phases, all in the same frame, before the node is ever drawn:
+	//   1. on_init        (top-down)  setup that depends on construction (text size, etc.)
+	//   2. resolve        (top-down)  world transforms
+	//   3. layout         (bottom-up) node.__layout() hook (containers organize children)
+	//   4. resolve        (top-down)  transforms changed by layout
+	//   5. on_ready       (top-down)  size, layout and transforms are final
+	//   6. on_enabled     (top-down)  only for enabled nodes (entry animations, auto focus)
+	on_init = new MiniEvent();
+	on_ready = new MiniEvent();
+
+	is_initialized = false;				// Init phases have run
 	
 	#endregion
 	
@@ -104,29 +111,78 @@ function MiniNodeProcessor(_owner = noone) constructor
 	#endregion
 	
 	#region System
-	
+
+	///@function			__initialize_subtree()
+	///@description			Run every init phase for the uninitialized nodes of the owner's subtree, in the same frame.
+	///						See the phase list at the top of this constructor.
+	static __initialize_subtree = function()
+	{
+		var _nodes = [];
+		__collect_uninitialized(owner, _nodes);
+		var _len = array_length(_nodes);
+
+		// 1. on_init (top-down)
+		for (var _i = 0; _i < _len; _i++)
+		{
+			var _processor = _nodes[_i].processor;
+			_processor.is_initialized = true;
+			_processor.on_init.invoke();
+		}
+
+		// 2. Resolve transforms (top-down)
+		owner.__resolve_transform_tree();
+
+		// 3. Layout (bottom-up: reversed pre-order puts descendants before ancestors)
+		for (var _i = _len - 1; _i >= 0; _i--)
+		{
+			_nodes[_i].__layout();
+		}
+
+		// 4. Resolve transforms changed by the layout
+		owner.__resolve_transform_tree();
+
+		// 5. on_ready (top-down)
+		for (var _i = 0; _i < _len; _i++)
+		{
+			_nodes[_i].processor.on_ready.invoke();
+		}
+
+		// 6. on_enabled for enabled nodes (top-down)
+		for (var _i = 0; _i < _len; _i++)
+		{
+			var _node = _nodes[_i];
+			if (_node.is_enabled()) _node.on_enabled.invoke();
+		}
+	}
+
+	///@function			__collect_uninitialized(_node, _result)
+	///@description			Pre-order collection of the uninitialized nodes in a subtree
+	static __collect_uninitialized = function(_node, _result)
+	{
+		if (!_node.processor.is_initialized) array_push(_result, _node);
+
+		var _children = _node.__nested_nodes;
+		var _len = array_length(_children);
+		for (var _i = 0; _i < _len; _i++)
+		{
+			__collect_uninitialized(_children[_i], _result);
+		}
+	}
+
 	///@function			__step_processor()
 	///@description			Main processing loop - called every frame by parent or NodeManager
 	///						Handles: initialization, transform resolution, process execution, child recursion
 	static __step_processor = function()
 	{
+		// First step: initialize this node and its whole subtree (disabled nodes are initialized too)
+		if (!is_initialized) __initialize_subtree();
+
 		// Skip processing if node is disabled
-        if (!owner.is_enabled() && is_initialized) return;
-		
-		// First frame: run init event
-		if (!is_initialized)
-		{
-			is_initialized = true;
-			on_init.invoke();
-			
-			call_later(1, time_source_units_frames, method(on_post_init, on_post_init.invoke));
-			if (owner.is_enabled()) call_later(2, time_source_units_frames, method(owner.on_enabled, owner.on_enabled.invoke));
-		}
-		
-        // Resolve any pending transform changes (deferred update pattern)
-        owner.__resolve_transform();
-                
-        
+        if (!owner.is_enabled()) return;
+
+		// Resolve pending transform changes (the renderer resolves again before drawing)
+		owner.__resolve_transform();
+
         // Run permanent processes (highest priority first)
         for (var _i = 0; _i < __processes_length; _i++)
         {

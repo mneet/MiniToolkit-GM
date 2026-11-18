@@ -1,6 +1,5 @@
-/// @description MiniNode Manager Create - State initialization & root node lifecycle driver
-/// All NodeManager state lives here as instance variables.
-/// Functions in NodeManager.gml access this via obj_node_manager.
+/// @description MiniNode Manager - singleton holding the NodeManager state
+/// Created on demand by __mnd(). Functions in the NodeManager* scripts access this instance.
 
 // Singleton guard - destroy any duplicate instance
 if (instance_number(obj_node_manager) > 1)
@@ -9,56 +8,29 @@ if (instance_number(obj_node_manager) > 1)
 	exit;
 }
 
-// MiniNode storage (weak references)
-__node_collection = {};
-
-// Root node management
-__root_nodes = {};
-__root_draw_order = [];
-root_count = 0;
-
-// Navigation 
-focused_node_id = noone;	
-prev_focused_node_id = noone;
-
-selected_node_id = noone; 
-prev_selected_node_id = noone;
-
-// Navigation behavior
-input_mode = MND_NAV_INPUT.BUTTON;
-
-// Input blocking flags
-block_button_navigation = false;
-block_cursor_navigation = false;
-block_button_action     = false;
-block_cursor_action     = false;
-
-// Input consumption
-__input_consumed = false;
-
-// Cursor tracking
-cursor_x      = 0;
-cursor_y      = 0;
-cursor_prev_x = 0;
-cursor_prev_y = 0;
-
-// Statistics
-node_count = 0;
-
-reset_all = function()
+///@function		__reset_state()
+///@description		Reset every piece of manager state (used on create and by mnd_destroy_all)
+__reset_state = function()
 {
-	__node_collection = {};
-	__root_nodes = {};
-	__root_draw_order = [];
-	root_count = 0;
-
-	focused_node_id = noone;	
-	prev_focused_node_id = noone;
-
-	block_button_navigation = false;
-	block_cursor_navigation = false;
-	block_button_action     = false;
-	block_cursor_action     = false;
-
-	node_count = 0;	
+	// Nodes
+	__roots = [];				// Root nodes in draw/process order (back to front)
+	__registry = {};			// id -> weak_ref, for global lookup (mnd_node_get)
+	
+	// Navigation
+	__focus_stack = [];			// Nodes with nav_group, top = focused
+	__screen_stack = [];		// { node, hid_previous }
+	
+	// Input
+	input_mode = MND_NAV_INPUT.BUTTON;
+	__input_mode_locked = false;
+	__block_counts = [0, 0, 0, 0];	// BUTTON_NAV, CURSOR_NAV, BUTTON_ACTION, CURSOR_ACTION
+	__input_consumed = false;
+	
+	// Cursor tracking
+	cursor_x = 0;
+	cursor_y = 0;
+	cursor_prev_x = 0;
+	cursor_prev_y = 0;
 }
+
+__reset_state();

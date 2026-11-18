@@ -1,32 +1,24 @@
-/// @description MiniNode Manager Step - Process all root nodes
+/// @description MiniNode Manager Step - input update, root processing, navigation input
 
-// Update input mode detection (cursor tracking + button/cursor swap)
-var _input = global.mnd_input;
-__input_consumed = false;
-cursor_prev_x = cursor_x;
-cursor_prev_y = cursor_y;
-cursor_x = _input.cursor_x();
-cursor_y = _input.cursor_y();
+__mnd_input_update();
 
-if (_input.button_input_detected())
-{
-	input_mode = MND_NAV_INPUT.BUTTON;
-}
-else if (_input.cursor_input_detected())
-{
-	input_mode = MND_NAV_INPUT.CURSOR;
-}
+// Process roots (copy: handlers may add/remove roots while processing)
+var _roots = [];
+array_copy(_roots, 0, __roots, 0, array_length(__roots));
 
-// Process all root nodes in draw order
-var _order = __root_draw_order;
-var _roots = __root_nodes;
-var _len   = array_length(_order);
-
+var _len = array_length(_roots);
 for (var _i = 0; _i < _len; _i++)
 {
-	var _root_id = _order[_i];
-	if (struct_exists(_roots, _root_id))
+	var _root = _roots[_i];
+	if (!_root.__destroyed && _root.parent == noone)
 	{
-		_roots[$ _root_id].processor.__step_processor();
+		_root.processor.__step_processor();
 	}
+}
+
+// Navigation input - only the focused group receives input
+var _focused_group = mnd_nav_get_focused_group();
+if (_focused_group != noone)
+{
+	_focused_group.__process_input();
 }

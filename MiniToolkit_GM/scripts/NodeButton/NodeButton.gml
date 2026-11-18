@@ -5,7 +5,7 @@
 ///@param {Enum.NODE_ORIGIN} [_origin]	Anchor point for positioning
 function MiniNodeButton(_name, _origin = MND_BUTTON_DEFAULT_ORIGIN) : MiniNode(_name, _origin) constructor
 {
-	navigator = new MiniNodeNavigator(self);
+	nav_item = new MiniNodeNavItem(self);
 	
 	// Visual nodes
 	background_node = noone;
@@ -17,9 +17,7 @@ function MiniNodeButton(_name, _origin = MND_BUTTON_DEFAULT_ORIGIN) : MiniNode(_
 	on_button_selected = new MiniEvent();
 	on_button_deselected = new MiniEvent();
 	
-	// Flags
-	button_is_pressed = false;
-		
+	
 	#region BUTTON BUILDER
 	
 	///@function						button_set_text(_text, _font, _width, _color)
@@ -69,23 +67,29 @@ function MiniNodeButton(_name, _origin = MND_BUTTON_DEFAULT_ORIGIN) : MiniNode(_
 
 	#region BUTTON SYSTEM
 	
-	// Connect navigator action events to button events
-	navigator.on_action_pressed.connect(self, function() {
-		button_is_pressed = true;
+	///@function			button_is_pressed()
+	///@description			Check if the button is currently held (between action pressed and released)
+	///@returns {Bool}
+	static button_is_pressed = function()
+	{
+		return nav_item.is_pressed;
+	}
+	
+	// Connect nav item action events to button events
+	nav_item.on_action_pressed.connect(self, function() {
 		on_button_pressed.invoke();
 	});
 	
-	navigator.on_action_released.connect(self, function() {
-		button_is_pressed = false;
+	nav_item.on_action_released.connect(self, function() {
 		on_button_released.invoke();
 	});
 	
-	// Connect focus events from navigator to button events
-	navigator.on_node_selected.connect(self, function() {
+	// Connect selection events from nav item to button events
+	nav_item.on_selected.connect(self, function() {
 		on_button_selected.invoke();
 	});
 	
-	navigator.on_node_deselected.connect(self, function() {
+	nav_item.on_deselected.connect(self, function() {
 		on_button_deselected.invoke();
 	});
 	

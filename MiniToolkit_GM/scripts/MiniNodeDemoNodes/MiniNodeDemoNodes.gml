@@ -16,7 +16,7 @@ function MiniNodeSimpleButton(_name, _text, _font = fnt_noto_14, _width = 180, _
     var _self = self;
     
     // Focus: Color + Scale pop animation
-    navigator.on_node_selected.connect(self, function () {
+    nav_item.on_selected.connect(self, function () {
         background_node.sprite_set_blend(c_aqua);
         // Scale up with a nice bounce effect
         mini_tween_node(self, 0.15)
@@ -25,7 +25,7 @@ function MiniNodeSimpleButton(_name, _text, _font = fnt_noto_14, _width = 180, _
     });
     
     // Unfocus: Reset color + smooth scale back
-    navigator.on_node_deselected.connect(self, function () {
+    nav_item.on_deselected.connect(self, function () {
         background_node.sprite_set_blend(c_white);
         // Scale back to normal smoothly
 		mini_tween_cancel_target(self);
@@ -43,7 +43,7 @@ function MiniNodeSimpleButton(_name, _text, _font = fnt_noto_14, _width = 180, _
     
     // Release: Bounce back
     on_button_released.connect(self, function() {
-		if (!navigator.is_selected) return;
+		if (!nav_item.is_selected) return;
 		
         mini_tween_node(self, 0.12)
             .tween("image_xscale", 1.08, EaseOutBack)
@@ -66,7 +66,8 @@ function MiniNodeSlider(_name, _min_value = 0, _max_value = 100, _initial_value 
 	min_value = _min_value;
 	max_value = _max_value;
 	current_value = clamp(_initial_value, _min_value, _max_value);
-	
+	value_step = (_max_value - _min_value) / 10; // Step used by left/right navigation
+
 	// Visual settings
 	track_sprite = spr_frame;
 	fill_sprite = spr_fill;
@@ -176,8 +177,8 @@ function MiniNodeSlider(_name, _min_value = 0, _max_value = 100, _initial_value 
 	///@description						Handle mouse dragging for slider control
 	static __slider_drag_control = function()
 	{
-		// Only update value while pressed/dragging (button_is_pressed is set by canvas action handler)
-		if (!button_is_pressed) return;
+		// Only update value while pressed/dragging (in cursor mode)
+		if (!button_is_pressed() || !mnd_input_is_cursor()) return;
 		
 		// Update value based on cursor position
 		var _track_start = transform.x + sys_origin_offset[0];
@@ -190,13 +191,13 @@ function MiniNodeSlider(_name, _min_value = 0, _max_value = 100, _initial_value 
 	}
 	
 	///@function						__update_knob_position()
-	///@description						Update the knob position based on value (called via event)
-	///@param {Real} _value				The current slider value
+	///@description						Place the knob according to the value, in local (unscaled) space,
+	///									so it is correct during init and during scale animations.
 	static __update_knob_position = function()
 	{
-		var _ratio = slider_get_normalized();			
-		var _x = round((local_transform.width * _ratio) +  sys_origin_offset[0]);
-		
+		var _origin_x = local_transform.width * NODE_ORIGIN_CONVERSION[origin][0];
+		var _x = round(local_transform.width * slider_get_normalized() + _origin_x);
+
 		knob_node.transform_set_position(_x, 0);
 	}
 	
@@ -208,23 +209,24 @@ function MiniNodeSlider(_name, _min_value = 0, _max_value = 100, _initial_value 
 	// Connect value change event to update knob position
 	on_value_changed.connect(self, __update_knob_position);
 	
-	// Set up initial knob position
-	processor.on_post_init.connect(self, function () {
-		var _ratio = slider_get_normalized();	
-		
-		// Get correct origin offset without animation influences
-		var _origin_xoffset = local_transform.width * NODE_ORIGIN_CONVERSION[origin][0];		
-		var _x = round((local_transform.width * _ratio) + _origin_xoffset);		
-		knob_node.transform_set_position(_x, 0);	
-	});
+	// Set up initial knob position (width is final at init; the resolve phase applies it before drawing)
+	processor.on_init.connect(self, __update_knob_position);
 	
 	// Selection feedback on knob
-	navigator.on_node_selected.connect(self, function () {
+	nav_item.on_selected.connect(self, function () {
 		knob_node.sprite_set_blend(c_aqua);
 	});
 	
-	navigator.on_node_deselected.connect(self, function () {
+	nav_item.on_deselected.connect(self, function () {
 		knob_node.sprite_set_blend(c_white);
+	});
+
+	// Left/right changes the value instead of moving the selection
+	nav_item.on_navigated.connect(self, function (_x, _y) {
+		if (abs(_x) <= abs(_y)) return;
+
+		slider_set_value(current_value + sign(_x) * value_step);
+		nav_item.consume_navigation();
 	});
 }
 
@@ -275,11 +277,11 @@ function MiniNodeToggle(_name, _label, _initial = false, _width = 200, _height =
 	});
 	
 	// Focus feedback
-	navigator.on_node_selected.connect(self, function () {
+	nav_item.on_selected.connect(self, function () {
 		background_node.sprite_set_blend(c_aqua);
 	});
 	
-	navigator.on_node_deselected.connect(self, function () {
+	nav_item.on_deselected.connect(self, function () {
 		background_node.sprite_set_blend(c_white);
 	});
 	

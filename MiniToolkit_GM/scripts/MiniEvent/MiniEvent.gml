@@ -3,7 +3,7 @@
     A basic event system based on the Observer Pattern
  
     Authors: M. Neet - https://github.com/mneet/MiniToolkit-GM
-    Version: 1.0.0
+    Version: 1.0.1
 */
 
 ///@function			MiniEvent()
@@ -16,6 +16,9 @@ function MiniEvent() constructor
 	
 	// Centralized sorted array of callbacks
 	__callbacks = [];
+	
+	// Reentrancy: while > 0, connect/disconnect work on a copy so the array being invoked is never mutated
+	__invoke_depth = 0;
 
 	#region Internal
 
@@ -32,7 +35,21 @@ function MiniEvent() constructor
         priority = _priority;
         once = _once;
         callback = _callback;
+		removed = false;	// Flagged when disconnected/consumed, so an ongoing invoke skips it
     }
+	
+	///@function					__remove_flagged()
+	///@description					Rebuild the callback array without removed entries (new array: ongoing invokes keep their snapshot)
+	static __remove_flagged = function()
+	{
+		var _kept = [];
+		var _count = array_length(__callbacks);
+		for (var _i = 0; _i < _count; _i++)
+		{
+			if (!__callbacks[_i].removed) array_push(_kept, __callbacks[_i]);
+		}
+		__callbacks = _kept;
+	}
 
 	///@function					__set_callbacks(_connection, _callback, _once, _priority)
 	///@description					Set up and push a callback for this event on a connection
@@ -88,6 +105,14 @@ function MiniEvent() constructor
 				_high = _mid - 1;
 			}
         }
+		
+		// Never mutate the array an ongoing invoke is iterating
+		if (__invoke_depth > 0)
+		{
+			var _copy = [];
+			array_copy(_copy, 0, __callbacks, 0, array_length(__callbacks));
+			__callbacks = _copy;
+		}
 		array_insert(__callbacks, _low, _entry);
 	}
     
@@ -115,46 +140,39 @@ function MiniEvent() constructor
 	///@returns {Struct.MiniEvent}		Self for chaining
 	static disconnect = function(_connection, _callback = undefined)
 	{
-        // Remove callbacks
-        var _count = array_length(__callbacks),
-            _new_idx = 0;
-        
-        for (var _i = 0; _i < _count; _i++)
-        {
-            var _cb = __callbacks[_i],
+		var _count = array_length(__callbacks);
+		var _any = false;
+		
+		for (var _i = 0; _i < _count; _i++)
+		{
+			var _cb = __callbacks[_i],
 				_cb_connection = undefined;
-
+			
 			if (_cb.connection_is_struct)
 			{
 				var _ref = _cb.connection;
 				if (!weak_ref_alive(_ref))
+				{
+					_cb.removed = true;
+					_any = true;
 					continue;
+				}
 				_cb_connection = _ref.ref;
 			}
 			else
 			{
 				_cb_connection = _cb.connection;
 			}
-
-			var _match = false;
-			if (_callback == undefined)
+			
+			if (_cb_connection == _connection && (_callback == undefined || _callback == _cb.callback))
 			{
-				_match = (_cb_connection == _connection);
+				_cb.removed = true;
+				_any = true;
 			}
-			else
-			{
-				_match = (_cb_connection == _connection) && (_callback == _cb.callback);
-			}
-
-			if (_match)
-				continue;
-            
-			__callbacks[_new_idx++] = _cb;
-        }
-        if (_new_idx < _count)
-		{
-			array_resize(__callbacks, _new_idx);
-		} 
+		}
+		
+		// Rebuilds into a new array, safe during invoke
+		if (_any) __remove_flagged();
 		
 		return self;
 	}
@@ -174,40 +192,53 @@ function MiniEvent() constructor
 			for (var _i = 0; _i < argument_count; _i++) _args[_i] = argument[_i];
 		}
 		
-		// Execute and rebuild array
-		var _new_idx = 0;
-		var _count = array_length(__callbacks);
+		// Iterate a snapshot: connect/disconnect inside callbacks never affect this loop
+		var _list = __callbacks;
+		var _count = array_length(_list);
+		if (_count == 0) return self;
+		
+		var _needs_cleanup = false;
+		__invoke_depth++;
+		
 		for (var _i = 0; _i < _count; _i++)
 		{
-			var _entry = __callbacks[_i];
-
+			var _entry = _list[_i];
+			if (_entry.removed) continue;	// Disconnected during this invoke
+			
 			// Validate connection
 			var _connection = _entry.connection;
 			if (_entry.connection_is_struct)
 			{
-				if (!weak_ref_alive(_connection)) continue;
+				if (!weak_ref_alive(_connection))
+				{
+					_entry.removed = true;
+					_needs_cleanup = true;
+					continue;
+				}
 				_connection = _connection.ref;
 			}
-			else
+			else if (!instance_exists(_connection))
 			{
-				if (!instance_exists(_connection)) continue;
+				_entry.removed = true;
+				_needs_cleanup = true;
+				continue;
 			}
-            
+			
+			// Consume 'once' before calling, so a nested invoke can't fire it again
+			if (_entry.once)
+			{
+				_entry.removed = true;
+				_needs_cleanup = true;
+			}
+			
             var _method = method(_connection, _entry.callback);
             
             if (_has_args) method_call(_method, _args);
             else _method();
-			
-			// Keep or remove based on 'once' flag
-			if (!_entry.once)
-            {
-				__callbacks[_new_idx++] = _entry;
-			}
 		}
-		if (_new_idx < _count)
-		{
-			array_resize(__callbacks, _new_idx);
-		} 
+		
+		__invoke_depth--;
+		if (_needs_cleanup) __remove_flagged();
 		
 		return self;
 	}
